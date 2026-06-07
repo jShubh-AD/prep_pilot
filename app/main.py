@@ -1,23 +1,17 @@
 from fastapi import FastAPI
-from app.api.v1.documents import doc_router
-from app.core.startup import initialize_services
-
 from contextlib import asynccontextmanager
+from app.api.ingestion import ingestion_router
+from app.api.query import query_router
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await initialize_services()
-
-    yield
 
 app = FastAPI(
     title="PrepPilot API",
-    version="1.0.0",
-    lifespan=lifespan,
+    version="1.0.0"
 )
 
-app.include_router(doc_router)
+app.include_router(ingestion_router, prefix="/upload", tags=["UPLOAD DOCs"])
+app.include_router(query_router, tags= ["Query"])
 
-@app.get('/')
+@app.get('/', tags=['HEALTH'])
 async def health():
     return {'status':'ok', 'message':'server running fine'}
