@@ -23,7 +23,6 @@ async def create_chunks(raw_blocks: list[RawTextBlock]) -> list[Chunk]:
         splits = splitter.split_text(block.text)
         safe_filename = sanitize_id(block.metadata.source_file)
 
-
         for i, split in enumerate(splits):
             cleaned = split.strip()
             if not cleaned or len(cleaned) < 30:
@@ -35,7 +34,6 @@ async def create_chunks(raw_blocks: list[RawTextBlock]) -> list[Chunk]:
                     metadata=ChunkMetadata(
                         source_file= safe_filename,
                         page_no= block.metadata.page_no,
-                        block_no= block.metadata.block_no,
                         chunk_index= i,
                         source_type= block.metadata.source_type,
                         content_type= block.metadata.content_type,

@@ -30,8 +30,8 @@ def embed_chunks(chunks: list[Chunk]) -> list[tuple[Chunk, list[float]]]:
     Embeds a list of chunks.
     Returns list of (chunk, embedding) pairs.
     
-    Note: free tier limit is 1500 requests/min for text-embedding-004
-    No sleep needed unless you have 1500+ chunks in one PDF.
+    Note: free tier limit is 1500 requests/min for embedding-001
+    sleep of 2 sec is needed if you have 1500+ chunks in one PDF.
     """
     embedded = []
 

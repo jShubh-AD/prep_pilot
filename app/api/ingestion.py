@@ -28,7 +28,7 @@ async def upload_doc(subject: str, file: UploadFile = File(...)):
     if len(contents) > max_size:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large. Max allowed size is 50MB."
+            detail="File too large. Max allowed size is 50MB."
         )
     
     if len(contents) == 0:

@@ -13,30 +13,23 @@ async def extract_text(pdf_bytes: bytes, source_file: str, subject: str):
 
     for page_no in range(len(doc)):
         page = doc[page_no]
-        blocks = page.get_text("blocks")
+        text = page.get_text()
 
-        for block in blocks:
-            x0, y0, x1, y1, text, block_no, block_type = block
+        if not text.strip():
+            continue
 
-            if block_type == 0 and text.strip():
-                raw_blocks.append(
-                    RawTextBlock(
-                    text=text.strip(),
-                    metadata=Metadata(
-                        source_file= source_file,
-                        page_no= page_no,
-                        block_no= block_no,
-                        source_type= "native_pdf",
-                        content_type= "text",
-                        subject= subject
-                        )
+        raw_blocks.append(
+            RawTextBlock(
+                text=text.strip(),
+                metadata=Metadata(
+                    source_file= source_file,
+                    page_no= page_no,
+                    source_type= "native_pdf",
+                    content_type= "text",
+                    subject= subject
                     )
                 )
+            )
     
     doc.close()
     return raw_blocks
-
-
-        
-
-

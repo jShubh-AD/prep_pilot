@@ -39,7 +39,6 @@ def store_embedings(
         chunk_id = (
             f"{safe_filename}_"
             f"p{chunk.metadata.page_no}_"
-            f"b{chunk.metadata.block_no}_"
             f"c{chunk.metadata.chunk_index}"
         )
 

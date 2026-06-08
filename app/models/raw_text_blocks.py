@@ -3,7 +3,6 @@ from pydantic import BaseModel
 class Metadata(BaseModel):
     source_file: str
     page_no: int
-    block_no: int
     source_type: str
     content_type: str
     subject: str
