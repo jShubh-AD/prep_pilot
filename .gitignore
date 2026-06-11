@@ -4,3 +4,12 @@ venv312
 
 __pycache__
 .__pycache__
+
+
+.bin
+
+
+todo.md
+
+data/
+*.sqlite3
