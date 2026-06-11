@@ -69,8 +69,9 @@ def query_collection(
     collection = get_or_create_collection(subject=subject)
 
     results = collection.query(
-        query_embeddings=query_embedings,
-        n_results= top_k
+        query_embeddings=[query_embedings],
+        n_results= top_k,
+        include=["documents", "metadatas", "distances"]
     )
 
     output = []

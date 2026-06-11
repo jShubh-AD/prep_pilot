@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.query import QueryRequest
 from app.embedings.embedder import embed_query
 from app.embedings.store import query_collection
+from app.generation.generator import genetate_answer
 
 
 
@@ -22,5 +23,7 @@ async def send_query(query: QueryRequest):
         top_k= query.top_k
     )
 
-    return {"success": True, "query": query.query ,"data": results}
+    answer = genetate_answer(query=query.query, retrived_chunk= results)
+
+    return {"success": True, "query": query.query ,"data": answer}
 

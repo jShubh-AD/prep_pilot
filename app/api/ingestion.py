@@ -45,7 +45,7 @@ async def upload_doc(subject: str, file: UploadFile = File(...)):
     if type == "native":
         raw_blocks = await extract_text(contents, file.filename, subject)
         chunks = await create_chunks(raw_blocks=raw_blocks)
-        embeddings = embed_chunks(chunks=chunks)
+        embeddings = embed_chunks(chunks=chunks[:30])
         stored = store_embedings(embeddings, subject= subject)
         return {
         "success": True,

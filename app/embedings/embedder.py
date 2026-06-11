@@ -7,22 +7,26 @@ import time
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 EMBEDDING_MODEL = "gemini-embedding-001"
+BATCH_SIZE = 50
 
 
-def embed_chunk(chunk: Chunk) -> list[float]:
+def embed_batch_chunks(chunks: list[Chunk]) -> list[list[float]]:
     """
-    Embeds a single chunk's text.
-    Returns a list of 768 floats.
+    Embeds chunks's text in batches of 50.
+    Returns a list of embeddings(list[float]).
     """
+    chunks_text =  [c.text for c in chunks]
+
     result = client.models.embed_content(
         model=EMBEDDING_MODEL,
-        contents=chunk.text,
+        contents=chunks_text,
         config= types.EmbedContentConfig(
             task_type="SEMANTIC_SIMILARITY",
-            output_dimensionality=786
+            output_dimensionality=768
         )
     )
-    return result.embeddings[0].values
+
+    return [e.values for e in result.embeddings]
 
 
 def embed_chunks(chunks: list[Chunk]) -> list[tuple[Chunk, list[float]]]:
@@ -35,14 +39,13 @@ def embed_chunks(chunks: list[Chunk]) -> list[tuple[Chunk, list[float]]]:
     """
     embedded = []
 
-    for i, chunk in enumerate(chunks):
-        embedding = embed_chunk(chunk)
-        embedded.append((chunk, embedding))
-        
-        # progress log — useful for large PDFs
-        if (i + 1) % 10 == 0:
-            print(f"[embedder] embedded {i + 1}/{len(chunks)} chunks")
-            time.sleep(2)
+    for i in range(0, len(chunks), BATCH_SIZE):
+        batch = chunks[i : i + BATCH_SIZE]
+        batch_embedings = embed_batch_chunks(batch)
+
+        embedded.extend(zip(batch, batch_embedings))
+
+        print(i // BATCH_SIZE +1)
 
     return embedded
 
@@ -53,7 +56,7 @@ def embed_query(query: str) -> list[float]:
         contents=query,
         config=types.EmbedContentConfig(
             task_type="SEMANTIC_SIMILARITY",
-            output_dimensionality=786
+            output_dimensionality=768
         )
     )
     return result.embeddings[0].values
