@@ -37,7 +37,7 @@ def embed_chunks(chunks: list[Chunk]) -> list[tuple[Chunk, list[float]]]:
     Note: free tier limit is 1500 requests/min for embedding-001
     sleep of 2 sec is needed if you have 1500+ chunks in one PDF.
     """
-    embedded = []
+    embedded: list[tuple[Chunk, list[float]]] = []
 
     for i in range(0, len(chunks), BATCH_SIZE):
         batch = chunks[i : i + BATCH_SIZE]

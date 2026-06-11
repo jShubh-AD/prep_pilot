@@ -6,6 +6,8 @@ from app.generation.generator import genetate_answer
 
 
 
+from app.core.subject_registry import resolve_subject
+
 query_router = APIRouter()
 
 @query_router.post("/query")
@@ -16,10 +18,18 @@ async def send_query(query: QueryRequest):
             detail="Query can't be empty."
         )
     
+    # Resolve subject and validate
+    subj_model = resolve_subject(query.subject)
+    if not subj_model:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Subject '{query.subject}' not found in registry."
+        )
+    
     query_embedings = embed_query(query=query.query)
     results = query_collection(
         query_embedings= query_embedings,
-        subject= query.subject,
+        subject= subj_model.subject_id,
         top_k= query.top_k
     )
 

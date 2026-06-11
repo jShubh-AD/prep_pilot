@@ -8,6 +8,7 @@ class ChunkMetadata(BaseModel):
     source_type: str
     content_type: str
     subject: str
+    subject_id: str
 
 
 class Chunk(BaseModel):

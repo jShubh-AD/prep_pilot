@@ -6,6 +6,7 @@ class Metadata(BaseModel):
     source_type: str
     content_type: str
     subject: str
+    subject_id: str
 
 class RawTextBlock(BaseModel):
     text: str

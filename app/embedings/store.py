@@ -1,31 +1,23 @@
 import chromadb
 from app.models.chunks import Chunk
+from app.core.helpers import sanitize_filename
 
-import re
-
-def sanitize_id(text: str) -> str:
-    # replace any character not in [a-zA-Z0-9._-] with underscore
-    return re.sub(r'[^a-zA-Z0-9._-]', '_', text)
+PATH="data/chromadb"
+COLLECTION_NAME="prep_pilot_documents"
 
 client = chromadb.PersistentClient(path="data/chromadb")
 
-
-def get_or_create_collection(subject: str):
-    safe_name = subject.strip().lower().replace(" ", "_")
-    if len(safe_name) < 3:
-        safe_name = f"sub_{safe_name}"  # "os" → "sub_os"
-
+def get_or_create_collection():
     return client.get_or_create_collection(
-        name = safe_name,
+        name = COLLECTION_NAME,
         metadata = {"hnsw:space":"cosine"}
     )
 
 def store_embedings(
         embedded: list[tuple[Chunk, list[float]]],
-        subject: str
     ):
 
-    collection = get_or_create_collection(subject)
+    collection = get_or_create_collection()
 
     ids = []
     documents = []
@@ -34,10 +26,11 @@ def store_embedings(
 
     for chunk, embedding in embedded:
 
-        safe_filename = sanitize_id(chunk.metadata.source_file)
+        safe_filename = sanitize_filename(chunk.metadata.source_file)
 
         chunk_id = (
-            f"{safe_filename}_"
+            f"{chunk.metadata.subject_id}_"
+            f"s{safe_filename}_"
             f"p{chunk.metadata.page_no}_"
             f"c{chunk.metadata.chunk_index}"
         )
@@ -66,11 +59,12 @@ def query_collection(
     Finds top_k most similar chunks to the query embedding.
     Returns list of results with text, metadata, and similarity distance.
     """
-    collection = get_or_create_collection(subject=subject)
+    collection = get_or_create_collection()
 
     results = collection.query(
         query_embeddings=[query_embedings],
         n_results= top_k,
+        where={"subject_id": subject},
         include=["documents", "metadatas", "distances"]
     )
 

@@ -46,4 +46,6 @@ def genetate_answer(query: str, retrived_chunk: list[dict]) -> dict:
 
     return {
         "answer": response.text.strip(),
+        "llm_context": context,
+        "db_found":retrived_chunk
     }

@@ -2,7 +2,7 @@ import pymupdf
 from app.models.raw_text_blocks import RawTextBlock, Metadata
 
 
-async def extract_text(pdf_bytes: bytes, source_file: str, subject: str):
+async def extract_text(pdf_bytes: bytes, source_file: str, subject: str, subject_id: str):
     """
     Extracts text blocks from a native PDF.
     Each block becomes a raw chunk candidate before splitting.
@@ -26,7 +26,8 @@ async def extract_text(pdf_bytes: bytes, source_file: str, subject: str):
                     page_no= page_no,
                     source_type= "native_pdf",
                     content_type= "text",
-                    subject= subject
+                    subject= subject,
+                    subject_id= subject_id
                     )
                 )
             )

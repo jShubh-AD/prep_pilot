@@ -5,12 +5,14 @@ from app.ingestion.text_extractor import extract_text
 from app.ingestion.create_chunks import create_chunks
 from app.embedings.embedder import embed_chunks
 from app.embedings.store import store_embedings
+from app.core.helpers import sanitize_filename
+from app.core.subject_registry import resolve_subject, register_subject
 
 ingestion_router = APIRouter()
 
 max_size = 50 * 1024 *1024 # 50MB
 
-@ingestion_router.post("/")
+@ingestion_router.post("/{subject}")
 async def upload_doc(subject: str, file: UploadFile = File(...)):
     if not file.filename.endswith(".pdf"):
         raise HTTPException(
@@ -43,10 +45,16 @@ async def upload_doc(subject: str, file: UploadFile = File(...)):
     type = await get_pdf_type(contents)
 
     if type == "native":
-        raw_blocks = await extract_text(contents, file.filename, subject)
+        file_name = sanitize_filename(file.filename)
+        # Resolve subject or dynamically register it if not found
+        subj_model = resolve_subject(subject)
+        if not subj_model:
+            subj_model = register_subject(subject_name=subject)
+            
+        raw_blocks = await extract_text(contents, file_name, subj_model.subject_name, subj_model.subject_id)
         chunks = await create_chunks(raw_blocks=raw_blocks)
-        embeddings = embed_chunks(chunks=chunks[:30])
-        stored = store_embedings(embeddings, subject= subject)
+        embeddings = embed_chunks(chunks=chunks)
+        stored = store_embedings(embeddings)
         return {
         "success": True,
         "total_embedded": len(embeddings),

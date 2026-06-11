@@ -2,13 +2,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.models.raw_text_blocks import RawTextBlock
 from app.models.chunks import Chunk, ChunkMetadata
 
-import re
-
-def sanitize_id(text: str) -> str:
-    # replace any character not in [a-zA-Z0-9._-] with underscore
-    return re.sub(r'[^a-zA-Z0-9._-]', '_', text)
-
-
 splitter = RecursiveCharacterTextSplitter(
     separators = ["\n\n", "\n", ". ", " ", ""],
     chunk_size=500,
@@ -21,7 +14,6 @@ async def create_chunks(raw_blocks: list[RawTextBlock]) -> list[Chunk]:
 
     for block in raw_blocks:
         splits = splitter.split_text(block.text)
-        safe_filename = sanitize_id(block.metadata.source_file)
 
         for i, split in enumerate(splits):
             cleaned = split.strip()
@@ -32,12 +24,13 @@ async def create_chunks(raw_blocks: list[RawTextBlock]) -> list[Chunk]:
                 Chunk(
                     text=split,
                     metadata=ChunkMetadata(
-                        source_file= safe_filename,
+                        source_file= block.metadata.source_file,
                         page_no= block.metadata.page_no,
                         chunk_index= i,
                         source_type= block.metadata.source_type,
                         content_type= block.metadata.content_type,
-                        subject= block.metadata.subject
+                        subject= block.metadata.subject,
+                        subject_id= block.metadata.subject_id
                     )
                 )
             )
