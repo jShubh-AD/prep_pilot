@@ -1,36 +1,33 @@
+import pymupdf4llm
 import pymupdf
-from app.models.raw_text_blocks import RawTextBlock, Metadata
+from app.models.md_model import MdModel
 
 
-async def extract_text(pdf_bytes: bytes, source_file: str, subject: str, subject_id: str):
+async def extract_text(
+        pdf_bytes: bytes, 
+        source_file: str,
+        subject: str, 
+        subject_id: str) ->  MdModel:
     """
-    Extracts text blocks from a native PDF.
-    Each block becomes a raw chunk candidate before splitting.
+    Extracts Full Doc from a native PDF in markdown.
     """
 
-    doc = pymupdf.open(stream = pdf_bytes)
-    raw_blocks = []
+    doc = pymupdf.open(stream=pdf_bytes, )
+    pages_md =[]
 
     for page_no in range(len(doc)):
-        page = doc[page_no]
-        text = page.get_text()
-
-        if not text.strip():
+        md = pymupdf4llm.to_markdown(doc, pages = [page_no], header =False, footer = False)
+        if not md.strip():
             continue
-
-        raw_blocks.append(
-            RawTextBlock(
-                text=text.strip(),
-                metadata=Metadata(
-                    source_file= source_file,
-                    page_no= page_no,
-                    source_type= "native_pdf",
-                    content_type= "text",
-                    subject= subject,
-                    subject_id= subject_id
-                    )
-                )
-            )
-    
+        pages_md.append(f"<!-- page {page_no} -->\n{md}")
     doc.close()
-    return raw_blocks
+
+    full_markdown = "\n".join(pages_md)
+
+    return MdModel(
+        content=full_markdown,
+        source_file=source_file,
+        source_type="native_pdf",
+        subject=subject,
+        subject_id=subject_id
+    )

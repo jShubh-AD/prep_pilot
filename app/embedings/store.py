@@ -1,5 +1,6 @@
 import chromadb
 from app.models.chunks import Chunk
+from collections import defaultdict
 from app.core.helpers import sanitize_filename
 
 PATH="data/chromadb"
@@ -31,7 +32,7 @@ def store_embedings(
         chunk_id = (
             f"{chunk.metadata.subject_id}_"
             f"s{safe_filename}_"
-            f"p{chunk.metadata.page_no}_"
+            # f"p{chunk.metadata.page_no}_"
             f"c{chunk.metadata.chunk_index}"
         )
 
@@ -51,7 +52,7 @@ def store_embedings(
 
 
 def query_collection(
-        query_embedings: list[float],
+        query_embedings: list[list[float]],
         subject: str,
         top_k: int = 5
     ) -> list[dict]:
@@ -62,19 +63,37 @@ def query_collection(
     collection = get_or_create_collection()
 
     results = collection.query(
-        query_embeddings=[query_embedings],
+        query_embeddings = query_embedings,
         n_results= top_k,
         where={"subject_id": subject},
         include=["documents", "metadatas", "distances"]
     )
 
-    output = []
+    seen = {}  # chunk_id -> output dict
+    freq = defaultdict(int)  # chunk_id -> how many queries retrieved it
 
-    for i in range(len(results["ids"][0])):
+    for q_idx in range(len(results["ids"])):
+        for i in range(len(results["ids"][q_idx])):
+            chunk_id = results["ids"][q_idx][i]
+            freq[chunk_id] += 1
+            
+            if chunk_id not in seen:
+                seen[chunk_id] = {
+                    "text": results["documents"][q_idx][i],
+                    "metadata": results["metadatas"][q_idx][i],
+                    "distance": results["distances"][q_idx][i],
+                }
+
+    # attach frequency as confidence, sort by it
+    output = []
+    for chunk_id, chunk in seen.items():
         output.append({
-            "text": results["documents"][0][i],
-            "metadata": results["metadatas"][0][i],
-            "distance": results["distances"][0][i]
+            **chunk,
+            "confidence": round(freq[chunk_id]/ 4, 2)  # 1, 2, 3, or 4
         })
+
+    print(f"output: {output}")
+
+    output.sort(key=lambda x: (-x["confidence"], x["distance"]))
 
     return output

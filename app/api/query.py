@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.query import QueryRequest
 from app.embedings.embedder import embed_query
 from app.embedings.store import query_collection
-from app.generation.generator import genetate_answer
+from app.generation.generator import genetate_answer, generallise_query
 
 
 
@@ -25,8 +25,12 @@ async def send_query(query: QueryRequest):
             status_code=404,
             detail=f"Subject '{query.subject}' not found in registry."
         )
-    
-    query_embedings = embed_query(query=query.query)
+    # Make generallise user query and generate multiple(3) similar querys
+    queries = generallise_query(query=query.query)
+
+    print(f"queries: {queries}")
+
+    query_embedings = embed_query(queries)
     results = query_collection(
         query_embedings= query_embedings,
         subject= subj_model.subject_id,
@@ -36,4 +40,3 @@ async def send_query(query: QueryRequest):
     answer = genetate_answer(query=query.query, retrived_chunk= results)
 
     return {"success": True, "query": query.query ,"data": answer}
-

@@ -51,8 +51,8 @@ async def upload_doc(subject: str, file: UploadFile = File(...)):
         if not subj_model:
             subj_model = register_subject(subject_name=subject)
             
-        raw_blocks = await extract_text(contents, file_name, subj_model.subject_name, subj_model.subject_id)
-        chunks = await create_chunks(raw_blocks=raw_blocks)
+        doc_content_md = await extract_text(contents, file_name, subj_model.subject_name, subj_model.subject_id)
+        chunks = create_chunks(md=doc_content_md)
         embeddings = embed_chunks(chunks=chunks)
         stored = store_embedings(embeddings)
         return {

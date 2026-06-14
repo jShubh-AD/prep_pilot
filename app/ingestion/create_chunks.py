@@ -1,38 +1,37 @@
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.models.raw_text_blocks import RawTextBlock
+from langchain_text_splitters import MarkdownTextSplitter
+from app.models.md_model import MdModel
 from app.models.chunks import Chunk, ChunkMetadata
+import re
 
-splitter = RecursiveCharacterTextSplitter(
-    separators = ["\n\n", "\n", ". ", " ", ""],
+splitter = MarkdownTextSplitter(
     chunk_size=500,
     chunk_overlap=50,
 )
 
 
-async def create_chunks(raw_blocks: list[RawTextBlock]) -> list[Chunk]:
-    chunks=[]
+def create_chunks(md: MdModel) -> list[Chunk]:
+    content = re.sub(r'<!-- page \d+ -->\n', '', md.content)
 
-    for block in raw_blocks:
-        splits = splitter.split_text(block.text)
+    splits = splitter.split_text(content)
+    chunks = []
 
-        for i, split in enumerate(splits):
-            cleaned = split.strip()
-            if not cleaned or len(cleaned) < 30:
-                continue
+    for i, split in enumerate(splits):
+        cleaned = split.strip()
+        if not cleaned or len(cleaned) < 30:
+            continue
 
-            chunks.append(
-                Chunk(
-                    text=split,
-                    metadata=ChunkMetadata(
-                        source_file= block.metadata.source_file,
-                        page_no= block.metadata.page_no,
-                        chunk_index= i,
-                        source_type= block.metadata.source_type,
-                        content_type= block.metadata.content_type,
-                        subject= block.metadata.subject,
-                        subject_id= block.metadata.subject_id
-                    )
+        chunks.append(
+            Chunk(
+                text=cleaned,
+                metadata=ChunkMetadata(
+                    source_file=md.source_file,
+                    chunk_index=i,
+                    source_type=md.source_type,
+                    content_type="text",
+                    subject=md.subject,
+                    subject_id=md.subject_id,
                 )
             )
-        
+        )
+
     return chunks
