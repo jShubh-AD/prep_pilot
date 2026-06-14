@@ -9,8 +9,20 @@ splitter = MarkdownTextSplitter(
 )
 
 
+IMAGE_PATTERN = re.compile(r'<!-- IMAGE_START -->.*?<!-- IMAGE_END -->', re.DOTALL)
+
+
 def create_chunks(md: MdModel) -> list[Chunk]:
     content = re.sub(r'<!-- page \d+ -->\n', '', md.content)
+    
+    # extract image blocks and replace with placeholders
+    images = {}
+    def replacer(match):
+        key = f"IMAGE_BLOCK_{len(images)}"
+        images[key] = match.group(0)
+        return f"\n{key}\n"
+    
+    content = IMAGE_PATTERN.sub(replacer, content)
 
     splits = splitter.split_text(content)
     chunks = []
@@ -19,6 +31,11 @@ def create_chunks(md: MdModel) -> list[Chunk]:
         cleaned = split.strip()
         if not cleaned or len(cleaned) < 30:
             continue
+
+        # reinsert image block if has key in the chunk
+        for key, block in images.items():
+            if key in cleaned:
+                cleaned = cleaned.replace(key, block)
 
         chunks.append(
             Chunk(
