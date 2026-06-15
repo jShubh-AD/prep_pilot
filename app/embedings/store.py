@@ -65,7 +65,7 @@ def query_collection(
     results = collection.query(
         query_embeddings = query_embedings,
         n_results= top_k,
-        where={"subject_id": subject},
+        # where={"subject_id": subject},
         include=["documents", "metadatas", "distances"]
     )
 

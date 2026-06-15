@@ -52,7 +52,6 @@ async def extract_text(
     return MdModel(
         content=full_markdown,
         source_file=source_file,
-        source_type="native_pdf",
         subject=subject,
         subject_id=subject_id
     )

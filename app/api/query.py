@@ -19,12 +19,12 @@ async def send_query(query: QueryRequest):
         )
     
     # Resolve subject and validate
-    subj_model = resolve_subject(query.subject)
-    if not subj_model:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Subject '{query.subject}' not found in registry."
-        )
+    # subj_model = resolve_subject(query.subject)
+    # if not subj_model:
+    #     raise HTTPException(
+    #         status_code=404,
+    #         detail=f"Subject '{query.subject}' not found in registry."
+    #     )
     # Make generallise user query and generate multiple(3) similar querys
     queries = generallise_query(query=query.query)
 
@@ -33,7 +33,7 @@ async def send_query(query: QueryRequest):
     query_embedings = embed_query(queries)
     results = query_collection(
         query_embedings= query_embedings,
-        subject= subj_model.subject_id,
+        subject= query.subject,
         top_k= query.top_k
     )
 

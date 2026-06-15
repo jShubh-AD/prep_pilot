@@ -7,6 +7,7 @@ from app.embedings.embedder import embed_chunks
 from app.embedings.store import store_embedings
 from app.core.helpers import sanitize_filename
 from app.core.subject_registry import resolve_subject, register_subject
+from app.ingestion.scanned_extractor import extract_scanned_pdf
 
 ingestion_router = APIRouter()
 
@@ -42,22 +43,41 @@ async def upload_doc(subject: str, file: UploadFile = File(...)):
     await file.seek(0)
 
     #  check pdf type is it native or scanned images
-    type = await get_pdf_type(contents)
+    pdf_type = await get_pdf_type(contents)
 
-    if type == "native":
-        file_name = sanitize_filename(file.filename)
-        # Resolve subject or dynamically register it if not found
-        subj_model = resolve_subject(subject)
-        if not subj_model:
-            subj_model = register_subject(subject_name=subject)
-            
+    file_name = sanitize_filename(file.filename)
+    
+    # Resolve subject or dynamically register it if not found
+    subj_model = resolve_subject(subject)
+    if not subj_model:
+        subj_model = register_subject(subject_name=subject)
+
+    if pdf_type == "native":
         doc_content_md = await extract_text(contents, file_name, subj_model.subject_name, subj_model.subject_id)
+        print("Extraction done")
         chunks = create_chunks(md=doc_content_md)
+        print("Chunking done")
+        embeddings = embed_chunks(chunks=chunks)
+        print("Embedddings done")
+        stored = store_embedings(embeddings)
+        print("Embeddings storing done")
+        return {
+        "success": True,
+        "pdf_type": pdf_type,
+        "subject_name": subj_model.subject_name,
+        "subject_id": subj_model.subject_id,
+        "total_embedded": len(embeddings),
+        "stored": stored
+        } 
+    else:
+        chunks = await extract_scanned_pdf(contents, file_name, subj_model.subject_name, subject_id=subj_model.subject_id)
         embeddings = embed_chunks(chunks=chunks)
         stored = store_embedings(embeddings)
         return {
         "success": True,
+        "pdf_type": pdf_type,
+        "subject_name": subj_model.subject_name,
+        "subject_id": subj_model.subject_id,
         "total_embedded": len(embeddings),
         "stored": stored
-    }
-    return {"success": False, "data": "vison pdf encountered"}
+        }

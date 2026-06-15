@@ -13,3 +13,16 @@ todo.md
 
 data/
 *.sqlite3
+
+# Frontend (Web)
+frontend/web/node_modules/
+frontend/web/dist/
+frontend/web/dist-ssr/
+frontend/web/.env
+frontend/web/*.env.local
+frontend/web/*.env.*.local
+frontend/web/*.log
+frontend/web/.eslintcache
+frontend/web/.vscode/
+frontend/web/.idea/
+frontend/web/.DS_Store

@@ -43,8 +43,6 @@ def create_chunks(md: MdModel) -> list[Chunk]:
                 metadata=ChunkMetadata(
                     source_file=md.source_file,
                     chunk_index=i,
-                    source_type=md.source_type,
-                    content_type="text",
                     subject=md.subject,
                     subject_id=md.subject_id,
                 )

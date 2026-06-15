@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api.ingestion import ingestion_router
 from app.api.query import query_router
@@ -7,6 +8,14 @@ from app.api.query import query_router
 app = FastAPI(
     title="PrepPilot API",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(ingestion_router, prefix="/upload", tags=["UPLOAD DOCs"])
