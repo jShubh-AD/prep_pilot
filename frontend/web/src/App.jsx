@@ -82,74 +82,89 @@ function App() {
       setStatusMessage('Please enter a Subject / Category.');
       return;
     }
-
     setUploadStatus('uploading');
-    setUploadProgress(5);
-    setStatusMessage('Uploading PDF file...');
+    setUploadProgress(10);
+    setStatusMessage('Uploading PDF to server...');
     setResponseData(null);
-
-    // Simulate multi-stage progress updates for better UX during synchronous embedding pipeline
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 95) {
-          clearInterval(progressInterval);
-          return 95;
-        }
-        const step = prev < 30 ? 10 : prev < 60 ? 5 : prev < 85 ? 3 : 1;
-        return prev + step;
-      });
-    }, 400);
-
-    const messageTimeout1 = setTimeout(() => {
-      setStatusMessage('Analyzing document structure (native vs scanned)...');
-    }, 1500);
-
-    const messageTimeout2 = setTimeout(() => {
-      setStatusMessage('Extracting document layout and text chunks...');
-    }, 4500);
-
-    const messageTimeout3 = setTimeout(() => {
-      setStatusMessage('Generating Gemini text embeddings in batches...');
-    }, 9000);
-
-    const messageTimeout4 = setTimeout(() => {
-      setStatusMessage('Saving embeddings to ChromaDB vector store...');
-    }, 15000);
 
     try {
       const formData = new FormData();
       formData.append('file', file);
 
+      // 1. Trigger the ingestion background task
       const response = await fetch(`${API_BASE}/upload/${encodeURIComponent(subject.trim())}`, {
         method: 'POST',
         body: formData,
       });
 
-      clearInterval(progressInterval);
-      clearTimeout(messageTimeout1);
-      clearTimeout(messageTimeout2);
-      clearTimeout(messageTimeout3);
-      clearTimeout(messageTimeout4);
+      const initData = await response.json();
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setUploadProgress(100);
-        setUploadStatus('success');
-        setStatusMessage('Success! PDF ingested, embedded, and indexed successfully.');
-        setResponseData(data);
-      } else {
+      if (!response.ok) {
         setUploadStatus('error');
-        setStatusMessage(data.detail || 'An error occurred during backend ingestion.');
-        setResponseData(data);
+        setStatusMessage(initData.detail || 'An error occurred triggering ingestion.');
+        setResponseData(initData);
+        return;
       }
-    } catch (error) {
-      clearInterval(progressInterval);
-      clearTimeout(messageTimeout1);
-      clearTimeout(messageTimeout2);
-      clearTimeout(messageTimeout3);
-      clearTimeout(messageTimeout4);
 
+      const taskId = initData.task_id;
+      setUploadProgress(20);
+      setStatusMessage('Document received. Initializing background embedding pipeline...');
+
+      // 2. Poll the status endpoint dynamically (preventing overlapping requests)
+      const pollStatus = async () => {
+        try {
+          const statusRes = await fetch(`${API_BASE}/upload/status/${taskId}`);
+          const statusData = await statusRes.json();
+
+          if (!statusRes.ok) {
+            setUploadStatus('error');
+            setStatusMessage('Failed to fetch background task status.');
+            setResponseData(statusData);
+            return;
+          }
+
+          // Update UI message and progress based on active backend status
+          if (statusData.status === 'PROCESSING') {
+            setUploadProgress(15);
+            setStatusMessage('Initializing background task on backend...');
+          } else if (statusData.status === 'EXTRACTING_TEXT') {
+            setUploadProgress(35);
+            setStatusMessage('Extracting PDF text and document structures...');
+          } else if (statusData.status === 'CHUNKING') {
+            setUploadProgress(55);
+            setStatusMessage('Parsing markdown & building text chunks...');
+          } else if (statusData.status === 'EMBEDDING') {
+            setUploadProgress(75);
+            setStatusMessage('Generating batch vector embeddings with Gemini...');
+          } else if (statusData.status === 'STORING') {
+            setUploadProgress(90);
+            setStatusMessage('Indexing vector records in ChromaDB...');
+          } else if (statusData.status === 'COMPLETED') {
+            setUploadProgress(100);
+            setUploadStatus('success');
+            setStatusMessage('Success! Ingestion completed. Chunks embedded and indexed.');
+            setResponseData(statusData);
+            return; // Stop polling
+          } else if (statusData.status === 'FAILED') {
+            setUploadStatus('error');
+            setStatusMessage(statusData.error_message || 'Background ingestion process failed.');
+            setResponseData(statusData);
+            return; // Stop polling
+          }
+
+          // Schedule the next poll only after this request has finished returning
+          setTimeout(pollStatus, 1500);
+
+        } catch (pollError) {
+          setUploadStatus('error');
+          setStatusMessage('Network error during polling: ' + pollError.message);
+        }
+      };
+
+      // Start the polling loop
+      setTimeout(pollStatus, 1500);
+
+    } catch (error) {
       setUploadStatus('error');
       setStatusMessage('Failed to connect to backend server. Please verify it is running on ' + API_BASE);
       setResponseData({ error: 'Connection refused', details: error.message });

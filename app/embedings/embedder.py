@@ -17,16 +17,28 @@ def embed_batch_chunks(chunks: list[Chunk]) -> list[list[float]]:
     """
     chunks_text =  [c.text for c in chunks]
 
-    result = client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=chunks_text,
-        config= types.EmbedContentConfig(
-            task_type="SEMANTIC_SIMILARITY",
-            output_dimensionality=768
-        )
-    )
+    max_retries = 3
+    base_delay = 2.0
 
-    return [e.values for e in result.embeddings]
+    for attempt in range(max_retries):
+        try:
+            result = client.models.embed_content(
+                model=EMBEDDING_MODEL,
+                contents=chunks_text,
+                config= types.EmbedContentConfig(
+                    task_type="SEMANTIC_SIMILARITY",
+                    output_dimensionality=768
+                )
+            )
+            return [e.values for e in result.embeddings]
+        except Exception as e:
+            is_transient = any(status in str(e) for status in ["503", "429", "UNAVAILABLE", "ResourceExhausted"])
+            if is_transient and attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"Gemini Embedding API 503/429 error, retrying in {delay}s... (Attempt {attempt+1}/{max_retries})")
+                time.sleep(delay)
+            else:
+                raise e
 
 
 def embed_chunks(chunks: list[Chunk]) -> list[tuple[Chunk, list[float]]]:

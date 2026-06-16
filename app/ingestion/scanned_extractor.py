@@ -30,24 +30,38 @@ IGNORE:
 
 Return ONLY a JSON array of chunk objects, no other text."""
 
+import asyncio
+
 async def describe_scanned_pages(page_bytes_list: list[tuple[int, bytes]]) -> list[dict]:
     contents = [
         types.Part.from_bytes(data=image_bytes, mime_type="image/png")
         for _, image_bytes in page_bytes_list
     ]
 
-    response = await client.aio.models.generate_content(
-        model="gemini-3.5-flash",
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SCANNED_SYSTEM_PROMPT,
-            temperature=0.1,
-            response_mime_type="application/json",
-            response_schema=list[GeminiChunk]
-        )
-    )
+    max_retries = 3
+    base_delay = 2.0  # seconds
 
-    return json.loads(response.text.strip())
+    for attempt in range(max_retries):
+        try:
+            response = await client.aio.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=SCANNED_SYSTEM_PROMPT,
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                    response_schema=list[GeminiChunk]
+                )
+            )
+            return json.loads(response.text.strip())
+        except Exception as e:
+            is_transient = any(status in str(e) for status in ["503", "429", "UNAVAILABLE", "ResourceExhausted"])
+            if is_transient and attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"Gemini API 503/429 error, retrying in {delay}s... (Attempt {attempt+1}/{max_retries})")
+                await asyncio.sleep(delay)
+            else:
+                raise e
 
 
 async def extract_scanned_pdf(
