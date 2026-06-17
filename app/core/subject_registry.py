@@ -106,3 +106,20 @@ def resolve_subject(query: str) -> SubjectModel | None:
             continue
             
     return None
+
+def get_all_subjects() -> list[SubjectModel]:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT subject_id, subject_name, university, subject_code FROM subjects")
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        SubjectModel(
+            subject_id=row[0],
+            subject_name=row[1],
+            university=row[2],
+            subject_code=row[3]
+        )
+        for row in rows
+    ]
+

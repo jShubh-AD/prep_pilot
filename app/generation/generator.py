@@ -4,7 +4,7 @@ from google.genai import types
 import json
 
 client = genai.Client(api_key= settings.GEMINI_API_KEY)
-LLM_Model = "gemini-2.5-flash-lite"
+LLM_Model = "gemini-2.5-flash"
 
 ans_prompt = """
 You are an intelligent exam prep tutor helping a student understand and prepare for their exams.

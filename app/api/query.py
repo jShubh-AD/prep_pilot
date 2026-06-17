@@ -6,7 +6,7 @@ from app.generation.generator import genetate_answer, generallise_query
 
 
 
-from app.core.subject_registry import resolve_subject
+from app.core.subject_registry import resolve_subject, get_all_subjects
 
 query_router = APIRouter()
 
@@ -40,3 +40,7 @@ async def send_query(query: QueryRequest):
     answer = genetate_answer(query=query.query, retrived_chunk= results)
 
     return {"success": True, "query": query.query ,"data": answer}
+
+@query_router.get("/subjects")
+async def get_subjects():
+    return get_all_subjects()

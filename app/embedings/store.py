@@ -92,7 +92,8 @@ def query_collection(
             "confidence": round(freq[chunk_id]/ 4, 2)  # 1, 2, 3, or 4
         })
 
-    print(f"output: {output}")
+    # print(f"output: {output}")
+
 
     output.sort(key=lambda x: (-x["confidence"], x["distance"]))
 
