@@ -4,7 +4,7 @@ import asyncio
 from google.genai import types
 import json
 from fastapi import HTTPException
-from app.core.redis_servcie import redis_client
+import app.core.redis_servcie as redis_client
 from app.models.redis_models import Session
 
 client = genai.Client(api_key= settings.GEMINI_API_KEY)
@@ -42,17 +42,19 @@ async def genetate_answer(
     query: str,
     retrived_chunk: list[dict],
     chats_key: str,
-    session_key: str,
+    session_id: str,
 ) -> dict:
 
     if not retrived_chunk:
         return {
             "answer": "I couldn't find relevant information for your query."
         }
+    
+    session_key= redis_client.get_session_key(session_id)
 
     session_data, chats = await asyncio.gather(
-        redis_client.get(session_key),
-        redis_client.lrange(chats_key, -10, -1)
+        redis_client.redis_client.get(session_key),
+        redis_client.redis_client.lrange(chats_key, -10, -1)
     )
 
     if not session_data:
@@ -73,6 +75,8 @@ async def genetate_answer(
         query=query,
     )
 
+    print(f"chats: {chats}")
+
     response = client.models.generate_content(
         model=LLM_Model,
         contents=final_prompt,
@@ -89,12 +93,12 @@ async def genetate_answer(
     session.tokens_used += response.usage_metadata.total_token_count
 
     await asyncio.gather(
-        redis_client.set(
+        redis_client.redis_client.set(
             session_key,
             session.model_dump_json(),
             keepttl=True,
         ),
-        redis_client.rpush(
+        redis_client.redis_client.rpush(
             chats_key,
             f"Human: {query}",
             f"Assistant: {answer}",
@@ -103,8 +107,9 @@ async def genetate_answer(
 
     return {
         "answer": answer,
-        "llm_context": context,
-        "db_found": retrived_chunk,
+        "session_id": session_id
+        # "llm_context": context,
+        # "db_found": retrived_chunk,
     }
 
 QUERY_EXPANSION_PROMPT = """You are a query expansion system for a student exam prep RAG application.

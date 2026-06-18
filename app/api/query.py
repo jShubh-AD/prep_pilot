@@ -23,7 +23,9 @@ async def send_query(req: QueryRequest):
     
     session_id, session = await get_or_create_session(req.session_id, True)
 
-    if session.tokens_used >= 2000 and session.messages_count >= 50 and session.is_guest:
+    print(f"session_id: {session_id} \nsession: {session}")
+
+    if session.tokens_used >= 2000 or session.messages_count >= 50 and session.is_guest:
         raise HTTPException(
             status_code=503,
             detail="You have reached your maximum daily limit."
@@ -31,17 +33,23 @@ async def send_query(req: QueryRequest):
     
     chats_key = get_chat_session_key(session_id, req.subject_id)
 
+    print(f"chats_key: {chats_key}")
+
     queries = generallise_query(query=req.query)
     print(f"queries: {queries}")
 
     query_embedings = embed_query(queries)
     results = query_collection(
         query_embedings= query_embedings,
-        subject= req.subject_id,
         top_k= req.top_k
     )
 
-    answer = await genetate_answer(query=req.query, retrived_chunk= results, chats_key= chats_key, sesion_key= get_session_key(session_id))
+    answer = await genetate_answer(
+        query=req.query, 
+        retrived_chunk= results, 
+        chats_key= chats_key, 
+        session_id= session_id
+    )
 
     return {"success": True, "query": req.query ,"data": answer}
 
