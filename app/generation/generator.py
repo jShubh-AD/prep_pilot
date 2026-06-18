@@ -1,7 +1,11 @@
 from google import genai
 from app.core.settings import settings
+import asyncio
 from google.genai import types
 import json
+from fastapi import HTTPException
+from app.core.redis_servcie import redis_client
+from app.models.redis_models import Session
 
 client = genai.Client(api_key= settings.GEMINI_API_KEY)
 LLM_Model = "gemini-2.5-flash"
@@ -12,9 +16,13 @@ You are an intelligent exam prep tutor helping a student understand and prepare 
 CONTEXT:
 {context}
 
+Previous Chat: {chats}
+
 STUDENT QUESTION: {query}
 
 INSTRUCTIONS:
+- See the previous chats to understand user behaviour and part conversations.
+- Understand how and what user wants based on your past interactions. Learn from you mistakes and response accordings.
 - Answer ONLY using the provided context above. Do not use outside knowledge.
 - If the answer is not in the context, say "This topic is not covered in the provided material."
 - Don't include resouces
@@ -30,35 +38,73 @@ INSTRUCTIONS:
 ANSWER:
 """
 
-def genetate_answer(query: str, retrived_chunk: list[dict]) -> dict:
+async def genetate_answer(
+    query: str,
+    retrived_chunk: list[dict],
+    chats_key: str,
+    session_key: str,
+) -> dict:
+
     if not retrived_chunk:
         return {
-            "answer": "I couldn't find relevant information for your query.",
-        } 
-    
-    context = []
-    for i, chunk in enumerate(retrived_chunk):
-        context.append(
-            f"[Source {i+1} | Confidence {chunk['confidence']}]\n{chunk['text']}"
-        )
-    context_str = "\n\n".join(context)
+            "answer": "I couldn't find relevant information for your query."
+        }
 
-    # inject into prompt
+    session_data, chats = await asyncio.gather(
+        redis_client.get(session_key),
+        redis_client.lrange(chats_key, -10, -1)
+    )
+
+    if not session_data:
+        await redis_client.delete(chats_key)
+        raise HTTPException(
+            status_code=400,
+            detail="Couldn't find any live session, Please try again."
+        )
+
+    context = [
+        f"[Source {i+1} | Confidence {chunk['confidence']}]\n{chunk['text']}"
+        for i, chunk in enumerate(retrived_chunk)
+    ]
+
     final_prompt = ans_prompt.format(
-        context=context_str,
-        query=query
+        context="\n\n".join(context),
+        chats="\n".join(chats),
+        query=query,
     )
 
     response = client.models.generate_content(
         model=LLM_Model,
         contents=final_prompt,
-        config={"temperature": 0.2,"max_output_tokens": 1024}
+        config={
+            "temperature": 0.2,
+            "max_output_tokens": 1024,
+        },
+    )
+
+    answer = response.text.strip()
+
+    session = Session.model_validate_json(session_data)
+    session.messages_count += 2
+    session.tokens_used += response.usage_metadata.total_token_count
+
+    await asyncio.gather(
+        redis_client.set(
+            session_key,
+            session.model_dump_json(),
+            keepttl=True,
+        ),
+        redis_client.rpush(
+            chats_key,
+            f"Human: {query}",
+            f"Assistant: {answer}",
+        ),
     )
 
     return {
-        "answer": response.text.strip(),
+        "answer": answer,
         "llm_context": context,
-        "db_found":retrived_chunk
+        "db_found": retrived_chunk,
     }
 
 QUERY_EXPANSION_PROMPT = """You are a query expansion system for a student exam prep RAG application.

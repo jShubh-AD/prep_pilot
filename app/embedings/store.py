@@ -53,7 +53,6 @@ def store_embedings(
 
 def query_collection(
         query_embedings: list[list[float]],
-        subject: str,
         top_k: int = 5
     ) -> list[dict]:
     """
@@ -65,7 +64,6 @@ def query_collection(
     results = collection.query(
         query_embeddings = query_embedings,
         n_results= top_k,
-        # where={"subject_id": subject},
         include=["documents", "metadatas", "distances"]
     )
 

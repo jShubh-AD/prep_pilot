@@ -2,10 +2,14 @@ from pydantic_settings import BaseSettings
 
 class Settings (BaseSettings):
     GEMINI_API_KEY: str
+    # AWS
     AWS_SECRET_KEY: str
     AWS_ACCESS_KEY: str
     AWS_REGION: str
     AWS_S3_BUCKET: str
+    # Redis
+    REDIS_HOST:str
+    REDIS_PORT:int
 
     class Config:
         env_file= ".env"

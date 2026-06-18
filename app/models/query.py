@@ -3,5 +3,6 @@ from pydantic import BaseModel
 
 class QueryRequest(BaseModel):
     query: str
-    subject: str
+    subject_id: str
+    session_id: str | None = None
     top_k: int = 5  # optional, defaults to 5
