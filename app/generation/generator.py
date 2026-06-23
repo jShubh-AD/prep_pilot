@@ -49,7 +49,6 @@ async def genetate_answer(
         return {
             "answer": "I couldn't find relevant information for your query."
         }
-    
     session_key= redis_client.get_session_key(session_id)
 
     session_data, chats = await asyncio.gather(

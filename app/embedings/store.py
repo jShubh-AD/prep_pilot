@@ -82,17 +82,11 @@ def query_collection(
                     "distance": results["distances"][q_idx][i],
                 }
 
-    # attach frequency as confidence, sort by it
+    # attach frequency as confidence
     output = []
     for chunk_id, chunk in seen.items():
         output.append({
             **chunk,
             "confidence": round(freq[chunk_id]/ 4, 2)  # 1, 2, 3, or 4
         })
-
-    # print(f"output: {output}")
-
-
-    output.sort(key=lambda x: (-x["confidence"], x["distance"]))
-
     return output

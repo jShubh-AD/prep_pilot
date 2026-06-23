@@ -6,9 +6,9 @@ import time
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-EMBEDDING_MODEL = "gemini-embedding-001"
-BATCH_SIZE = 50
 
+BATCH_SIZE = 50
+EMBEDDING_MODEL="gemini-embedding-2"
 
 def embed_batch_chunks(chunks: list[Chunk]) -> list[list[float]]:
     """
