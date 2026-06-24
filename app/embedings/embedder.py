@@ -60,15 +60,3 @@ def embed_chunks(chunks: list[Chunk]) -> list[tuple[Chunk, list[float]]]:
         print(i // BATCH_SIZE +1)
 
     return embedded
-
-
-def embed_query(query: list[str]) -> list[list[float]]:
-    result = client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=query,
-        config=types.EmbedContentConfig(
-            task_type="RETRIEVAL_QUERY",
-            output_dimensionality=768
-        )
-    )
-    return [v.values for v in result.embeddings] 
