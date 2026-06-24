@@ -1,11 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from app.models.query import QueryRequest
-from app.embedings.embedder import embed_query
-from app.embedings.store import query_collection
-from app.generation.generator import genetate_answer, generallise_query
-from uuid import uuid4
-from app.core.redis_servcie import get_chat_session_key, get_session_key, redis_client, get_or_create_session
-from app.models.redis_models import Session
+from app.schemas.query import QueryRequest
+from app.core.redis_servcie import  get_or_create_session
 from app.graphs.states import QueryState
 from app.graphs.graph import query_graph
 

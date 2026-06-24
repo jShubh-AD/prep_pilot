@@ -1,5 +1,5 @@
 from redis.asyncio import Redis
-from app.models.redis_models import Session
+from app.schemas.redis_schemas import Session
 from app.core.settings import settings
 from uuid import uuid4
 

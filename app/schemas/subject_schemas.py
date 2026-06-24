@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-class SubjectModel(BaseModel):
+class CreateSubjectModel(BaseModel):
     subject_id: int
     subject_name: str
     subject_codes: list[str] | None = None

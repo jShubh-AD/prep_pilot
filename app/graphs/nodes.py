@@ -5,7 +5,7 @@ from app.graphs.states import QueryState
 from app.core.settings import settings
 from pydantic import BaseModel, Field
 from collections import defaultdict
-from app.models.chunks import Chunk
+from app.schemas.chunks import Chunk
 from app.core.redis_servcie import get_redis, get_chat_session_key
 from fastapi import HTTPException
 import asyncio

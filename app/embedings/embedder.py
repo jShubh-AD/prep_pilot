@@ -1,6 +1,6 @@
 from google import genai
 from google.genai import types
-from app.models.chunks import Chunk
+from app.schemas.chunks import Chunk
 from app.core.settings import settings
 import time
 

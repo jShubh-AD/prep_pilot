@@ -2,7 +2,7 @@ import sqlite3
 import json
 import os
 import re
-from app.models.ingestion_model import SubjectModel
+from app.schemas.subject_schemas import CreateSubjectModel
 
 DB_PATH = "data/subjects.db"
 
@@ -36,7 +36,7 @@ def register_subject(
     university: str | None = None,
     subject_code: str | None = None,
     aliases: list[str] | None = None
-) -> SubjectModel:
+) -> CreateSubjectModel:
     if not subject_id:
         subject_id = slugify(subject_name)
     
@@ -64,14 +64,14 @@ def register_subject(
     finally:
         conn.close()
         
-    return SubjectModel(
+    return CreateSubjectModel(
         subject_name=subject_name,
         subject_id=subject_id,
         university=university,
         subject_code=subject_code
     )
 
-def resolve_subject(query: str) -> SubjectModel | None:
+def resolve_subject(query: str) -> CreateSubjectModel | None:
     query_norm = query.lower().strip()
     if not query_norm:
         return None
@@ -85,7 +85,7 @@ def resolve_subject(query: str) -> SubjectModel | None:
     for subject_id, subject_name, university, subject_code, aliases_str in rows:
         # Check direct matches
         if query_norm == subject_id.lower() or query_norm == subject_name.lower():
-            return SubjectModel(
+            return CreateSubjectModel(
                 subject_name=subject_name,
                 subject_id=subject_id,
                 university=university,
@@ -96,7 +96,7 @@ def resolve_subject(query: str) -> SubjectModel | None:
         try:
             aliases = json.loads(aliases_str or "[]")
             if query_norm in aliases:
-                return SubjectModel(
+                return CreateSubjectModel(
                     subject_name=subject_name,
                     subject_id=subject_id,
                     university=university,
@@ -107,14 +107,14 @@ def resolve_subject(query: str) -> SubjectModel | None:
             
     return None
 
-def get_all_subjects() -> list[SubjectModel]:
+def get_all_subjects() -> list[CreateSubjectModel]:
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT subject_id, subject_name, university, subject_code FROM subjects")
     rows = cursor.fetchall()
     conn.close()
     return [
-        SubjectModel(
+        CreateSubjectModel(
             subject_id=row[0],
             subject_name=row[1],
             university=row[2],

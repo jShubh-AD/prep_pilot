@@ -1,6 +1,6 @@
 from langchain_text_splitters import MarkdownTextSplitter
-from app.models.md_model import MdModel
-from app.models.chunks import Chunk, ChunkMetadata
+from app.schemas.md_model import MdModel
+from app.schemas.chunks import Chunk, ChunkMetadata
 import re
 
 splitter = MarkdownTextSplitter(

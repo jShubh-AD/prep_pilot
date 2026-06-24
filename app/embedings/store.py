@@ -1,5 +1,5 @@
 import chromadb
-from app.models.chunks import Chunk
+from app.schemas.chunks import Chunk
 from collections import defaultdict
 from app.core.helpers import sanitize_filename
 

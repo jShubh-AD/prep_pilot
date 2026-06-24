@@ -1,7 +1,7 @@
 from typing import TypedDict, Annotated
 from operator import add
-from app.models.chunks import Chunk
-from app.models.redis_models import Session
+from app.schemas.chunks import Chunk
+from app.schemas.redis_schemas import Session
 
 class QueryState(TypedDict):
     session: Session

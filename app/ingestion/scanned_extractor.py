@@ -1,7 +1,7 @@
 from google import genai
 from google.genai import types
-from app.models.chunks import Chunk, ChunkMetadata
-from app.models.gemini_chunk import GeminiChunk
+from app.schemas.chunks import Chunk, ChunkMetadata
+from app.schemas.gemini_chunk import GeminiChunk
 import pymupdf
 import json
 from app.core.settings import  settings

@@ -1,6 +1,6 @@
 import pymupdf4llm
 import pymupdf
-from app.models.md_model import MdModel
+from app.schemas.md_model import MdModel
 import re
 from app.ingestion.vision import describe_image
 
