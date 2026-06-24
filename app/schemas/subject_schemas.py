@@ -1,15 +1,38 @@
 from pydantic import BaseModel
+from typing import Generic, TypeVar
 
-class CreateSubjectModel(BaseModel):
-    subject_id: int
+T = TypeVar("T")
+
+# SubjectCreate 
+class CreateSubject(BaseModel):
     subject_name: str
     subject_codes: list[str] | None = None
     universities : list[str] | None = None
     slugs: list[str] | None = None
     semester: int | None = None
 
-# SubjectCreate 
+    model_config={
+        "from_attributes": True
+    }
 
 # subject response
+class SubjectResponse(BaseModel):
+    subject_id: int
+    subject_name: str
 
-# all subjects
+    model_config = {
+        "from_attributes": True
+    }
+
+class UpdateSubject(BaseModel):
+    subject_name: str | None=None
+    subject_codes: list[str] | None = None
+    universities : list[str] | None = None
+    slugs: list[str] | None = None
+    semester: int | None = None
+
+
+class ApiResponse(BaseModel, Generic[T]):
+    success: bool
+    message: str | None = None
+    data: T | None = None
