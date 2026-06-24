@@ -7,6 +7,33 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data 
+    
+  postgres:
+    image: postgres:16
+    container_name: prep_pilot_postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_db:/var/lib/postgresql/data
+    env_file:
+      - .env
+
+  api:
+    build: .
+    container_name: prep_pilot_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - postgres
+
+
 
 volumes:
   redis_data:
+  postgres_db:

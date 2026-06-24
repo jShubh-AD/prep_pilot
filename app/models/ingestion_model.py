@@ -1,7 +1,15 @@
 from pydantic import BaseModel
 
 class SubjectModel(BaseModel):
+    subject_id: int
     subject_name: str
-    subject_id: str
-    university: str | None = None
-    subject_code: str | None = None
+    subject_codes: list[str] | None = None
+    universities : list[str] | None = None
+    slugs: list[str] | None = None
+    semester: int | None = None
+
+# SubjectCreate 
+
+# subject response
+
+# all subjects
