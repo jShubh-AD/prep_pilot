@@ -31,7 +31,7 @@ app.add_middleware(
 )
 
 
-app.include_router(ingestion_router, prefix="/upload", tags=["UPLOAD DOCs"])
+app.include_router(ingestion_router, prefix="/tasks", tags=["Tasks"])
 app.include_router(query_router, prefix="/chats", tags= ["Chats"])
 app.include_router(subject_router, prefix="/subjects", tags= ["Subjects"])
 

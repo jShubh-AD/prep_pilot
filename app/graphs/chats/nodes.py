@@ -1,7 +1,7 @@
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.embedings.store import get_or_create_collection
-from app.graphs.states import QueryState
+from app.graphs.chats.states import QueryState
 from app.core.settings import settings
 from pydantic import BaseModel, Field
 from collections import defaultdict

@@ -1,12 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from app.schemas.query import QueryRequest
 from app.core.redis_servcie import  get_or_create_session
-from app.graphs.states import QueryState
-from app.graphs.graph import query_graph
-
-
-
-from app.core.subject_registry import resolve_subject, get_all_subjects
+from app.graphs.chats.states import QueryState
+from app.graphs.chats.graph import query_graph
 
 query_router = APIRouter()
 
@@ -38,7 +34,3 @@ async def send_query(req: QueryRequest):
     state = await query_graph.ainvoke(state)
 
     return {"success": True, "query": req.query ,"data": state["llm_ans"],"session_id": session_id}
-
-@query_router.get("/subjects")
-async def get_subjects():
-    return get_all_subjects()

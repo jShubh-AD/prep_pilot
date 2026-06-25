@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
-from app.graphs.states import QueryState
-from app.graphs.nodes import query_expansion, query_embedings, retrive_chunks, generate_response
+from app.graphs.chats.states import QueryState
+from app.graphs.chats.nodes import query_expansion, query_embedings, retrive_chunks, generate_response
 
 # query graph builder
 build_query_graph = StateGraph(QueryState)
