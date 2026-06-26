@@ -3,11 +3,14 @@ from app.schemas.query import QueryRequest
 from app.core.redis_servcie import  get_or_create_session
 from app.graphs.chats.states import QueryState
 from app.graphs.chats.graph import query_graph
+import time
 
 query_router = APIRouter()
 
 @query_router.post("/query")
 async def send_query(req: QueryRequest):
+    start = time.time()
+    print(f"[API] Hit at: {start}")
     if not req.query.strip():
         raise HTTPException(
             status_code=400,
@@ -32,5 +35,5 @@ async def send_query(req: QueryRequest):
         errors=[]
     )
     state = await query_graph.ainvoke(state)
-
+    print(f"Total time: {time.time() - start:.2f}s")
     return {"success": True, "query": req.query ,"data": state["llm_ans"],"session_id": session_id}

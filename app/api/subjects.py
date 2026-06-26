@@ -39,7 +39,7 @@ async def create_subject(req: CreateSubject, db: AsyncSession = Depends(get_db))
         raise HTTPException(500, "Something went wrong please try again.")
 
 
-# get all supject
+# get all supjects
 @subject_router.get("", response_model=ApiResponse[list[SubjectResponse]])
 async def get_subjects(db: AsyncSession = Depends(get_db)):
     try:
@@ -59,6 +59,7 @@ async def get_subjects(db: AsyncSession = Depends(get_db)):
         raise HTTPException(500, detail="Something went wrong, please try again.")
 
 
+# get subject by id
 @subject_router.get("/{subject_id}", status_code=200, response_model= ApiResponse[SubjectBase])
 async def get_subject(subject_id: int, db: AsyncSession =Depends(get_db)):
     try:
@@ -74,7 +75,6 @@ async def get_subject(subject_id: int, db: AsyncSession =Depends(get_db)):
     except Exception as e:
         print(e)
         raise HTTPException(500, "Something went wrong please try again.")
-
 
 
 # update subject by id
@@ -110,10 +110,26 @@ async def update_subject(
         await db.rollback()
         raise HTTPException(500, "Something went wrong please try again.")
 
+# delete subject by id
+@subject_router.delete("/{subject_id}", status_code=200, response_model= ApiResponse)
+async def delete_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
+    try:
+        subject = await db.get(Subject, subject_id)
+        if not subject:
+            raise HTTPException(404, detail= "Subject not found")
+        await db.delete(subject)
+        await db.commit()
+        return ApiResponse(
+            success=True,
+            message="Subject deleted successfully."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, detail="Something whent wrong.")
 
-# upload subject pyqs by id
 
-# upload botes by id
+# upload notes by id
 @subject_router.post("/{subject_id}/upload/notes")
 async def upload_notes(
     subject_id: int,
@@ -162,7 +178,8 @@ async def upload_notes(
         task_id=task_id,
         temp_filepath=temp_filepath,
         original_filename=file.filename,
-        subject=subject_id
+        doc_type= "notes",
+        subject_id=subject_id,
     )
     
     return {
@@ -172,18 +189,4 @@ async def upload_notes(
         "file_name": file.filename
     }
 
-# delete subject by id
-@subject_router.delete("/{subject_id}", status_code=200, response_model= ApiResponse)
-async def delete_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
-    try:
-        subject = await db.get(Subject, subject_id)
-        if not subject:
-            raise HTTPException(404, detail= "Subject not found")
-        await db.delete(subject)
-        await db.commit()
-        return ApiResponse(
-            success=True,
-            message="Subject deleted successfully."
-        )
-    except Exception as e:
-        raise HTTPException(500, detail="Something whent wrong.")
+# upload subject pyqs by id

@@ -6,7 +6,7 @@ from app.schemas.redis_schemas import Session
 class QueryState(TypedDict):
     session: Session
     session_id: str
-    subject_id: str
+    subject_id: int
     llm_ans: str
     queries: Annotated[list[str], add]
     embeddings: list[list[float]]

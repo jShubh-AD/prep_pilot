@@ -70,67 +70,43 @@ def get_task(task_id: str) -> dict | None:
         return dict(row)
     return None
 
-from app.ingestion.pdf_type_detection import get_pdf_type
 from app.core.helpers import sanitize_filename
-from app.ingestion.text_extractor import extract_text
-from app.ingestion.create_chunks import create_chunks
-from app.embedings.embedder import embed_chunks
-from app.embedings.store import store_embedings
 from app.core.database import async_session_local
-from app.ingestion.scanned_extractor import extract_scanned_pdf
-from app.schemas.subject_schemas import SubjectBase
 from app.models.subject_models import Subject
+from app.graphs.ingestion.graph import ingestion_graph
+from app.graphs.ingestion.state import IngestionState
 
 async def run_ingestion_task(
         task_id: str,
         temp_filepath: str, 
         original_filename: str,
-        subject_id: int
+        subject_id: int,
+        doc_type: str
     ):
     try:
-        # 1. Read the saved temp file contents
-        with open(temp_filepath, "rb") as f:
-            contents = f.read()
-        
-        # 2. Ingest
-        update_task_status(task_id, "EXTRACTING_TEXT")
-        pdf_type = await get_pdf_type(contents)
-        file_name = sanitize_filename(original_filename)
-        
-        # Resolve subject or dynamically register it if not found
         async with async_session_local() as db:
             subject = await db.get(Subject, subject_id)
             if not subject:
                 raise ValueError(f"Subject with id {subject_id} not found")
         
-        if pdf_type == "native":
-            doc_content_md = await extract_text(contents, file_name, subject.subject_name, subject.subject_id)
-            
-            update_task_status(task_id, "CHUNKING")
-            chunks = create_chunks(md=doc_content_md)
-            
-            update_task_status(task_id, "EMBEDDING")
-            embeddings = embed_chunks(chunks=chunks)
-            
-            update_task_status(task_id, "STORING")
-            stored = store_embedings(embeddings)
-        else:
-            chunks = await extract_scanned_pdf(contents, file_name, subject.subject_name, subject_id=subject.subject_id)
-            
-            update_task_status(task_id, "EMBEDDING")
-            embeddings = embed_chunks(chunks=chunks)
-            
-            update_task_status(task_id, "STORING")
-            stored = store_embedings(embeddings)
-            
-        update_task_status(task_id, "COMPLETED", total_embedded=len(embeddings), stored=stored)
+        file_name = sanitize_filename(original_filename)
+        state = IngestionState(
+            task_id=task_id,
+            tempfile_path= temp_filepath,
+            file_name= file_name,
+            subject_id= subject_id,
+            subject_name= subject.subject_name,
+            doc_type=doc_type
+        )
+
+        result = await ingestion_graph.ainvoke(state)
+        update_task_status(task_id, "COMPLETED", total_embedded=len(result["embeddings"]), stored=result["stored"])
     except Exception as e:
         import traceback
         error_msg = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
         print(f"Error in background ingestion task {task_id}: {error_msg}")
         update_task_status(task_id, "FAILED", error_message=str(e))
     finally:
-        # Clean up the local temp PDF file
         try:
             if os.path.exists(temp_filepath):
                 os.remove(temp_filepath)

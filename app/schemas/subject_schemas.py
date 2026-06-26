@@ -56,9 +56,9 @@ class TaskModel(BaseModel):
     subject_id: int
     total_embedded: int
     stored: int
-    error_message: int
-    created_at: int
-    updated_at: int
+    error_message: str | None
+    created_at: str
+    updated_at: str
 
     model_config={
         "from_attributes": True

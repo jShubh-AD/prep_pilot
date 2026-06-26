@@ -5,7 +5,8 @@ class ChunkMetadata(BaseModel):
     source_file: str
     chunk_index: int
     subject: str
-    subject_id: str
+    subject_id: int
+    doc_type: str
 
 
 class Chunk(BaseModel):
