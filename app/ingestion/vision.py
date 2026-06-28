@@ -81,7 +81,7 @@ async def describe_scanned_pages(page_bytes_list: list[tuple[int, bytes]]) -> li
     for attempt in range(max_retries):
         try:
             response = await client.aio.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-2.5-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=SCANNED_SYSTEM_PROMPT,

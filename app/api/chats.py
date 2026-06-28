@@ -25,7 +25,7 @@ async def send_query(req: QueryRequest):
 
     print(f"session_id: {session_id} \nsession: {session}")
 
-    if session.tokens_used >= 20000 or session.messages_count >= 50 and session.is_guest:
+    if session.tokens_used >= 2000 or session.messages_count >= 50 and session.is_guest:
         raise HTTPException(
             status_code=503,
             detail="You have reached your maximum daily limit."
@@ -58,7 +58,7 @@ async def send_query(req: QueryRequest):
             'done': True,
             'session_id': session_id,
             'total_time': time.time() - start,
-            'tokens_available': 20000 - session.tokens_used,
+            'tokens_available': 2000 - session.tokens_used,
             'tokens_used': session.tokens_used
             })}\n\n"""
 

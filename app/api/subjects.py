@@ -40,13 +40,13 @@ async def create_subject(req: CreateSubject, db: AsyncSession = Depends(get_db))
 
 
 # get all supjects
-@subject_router.get("", response_model=ApiResponse[list[SubjectResponse]])
+@subject_router.get("", response_model=ApiResponse[list[SubjectBase]])
 async def get_subjects(db: AsyncSession = Depends(get_db)):
     try:
         results = await db.execute(select(Subject))
         subjects = results.scalars().all()
         data = [
-            SubjectResponse.model_validate(subject)
+            SubjectBase.model_validate(subject)
             for subject in subjects
         ]
         return ApiResponse(
@@ -130,9 +130,10 @@ async def delete_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
 
 
 # upload notes by id
-@subject_router.post("/{subject_id}/upload/notes")
+@subject_router.post("/{subject_id}/upload/{doc_type}")
 async def upload_notes(
     subject_id: int,
+    doc_type:str,
     background_task: BackgroundTasks,
     file: UploadFile=File(...),
     ):
@@ -140,6 +141,12 @@ async def upload_notes(
         raise HTTPException(
             status_code=400,
             detail="Only PDFs are allowed"
+        )
+
+    if doc_type not in ["notes", "pyq"]:
+        raise HTTPException(
+            status_code=400,
+            detail="can only upload eithe notes or pyq."
         )
     
     if file.content_type != 'application/pdf':
@@ -178,7 +185,7 @@ async def upload_notes(
         task_id=task_id,
         temp_filepath=temp_filepath,
         original_filename=file.filename,
-        doc_type= "notes",
+        doc_type= doc_type,
         subject_id=subject_id,
     )
     
