@@ -2,11 +2,11 @@ name: CI/CD PrepPilot
 
 on:
   push:
-    bramches: [main]
+    branches: [main]
 
 jobs:
   deploy:
-    runs-on: unbuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,8 +17,8 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-            cd ~/prep_pilot
-            git pull origin main
-            docker compose down
-            docker compose up -d --build
+          script: |
+              cd ~/prep_pilot
+              git pull origin main
+              docker compose down
+              docker compose up -d --build
