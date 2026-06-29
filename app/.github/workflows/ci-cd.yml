@@ -1,0 +1,24 @@
+name: CI/CD PrepPilot
+
+on:
+  push:
+    bramches: [main]
+
+jobs:
+  deploy:
+    runs-on: unbuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 vio SSH 
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+            cd ~/prep_pilot
+            git pull origin main
+            docker compose down
+            docker compose up -d --build
