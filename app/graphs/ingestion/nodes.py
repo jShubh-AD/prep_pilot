@@ -8,7 +8,7 @@ from app.schemas.chunks import Chunk, ChunkMetadata
 from langchain_text_splitters import MarkdownTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from app.core.settings import settings
-from app.embedings.store import get_or_create_collection
+from app.core.chroma_db import get_or_create_collection
 
 splitter = MarkdownTextSplitter(
     chunk_size=500,

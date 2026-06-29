@@ -1,6 +1,6 @@
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from app.embedings.store import get_or_create_collection
+from app.core.chroma_db import get_or_create_collection
 from app.graphs.chats.states import QueryState
 from app.core.settings import settings
 from pydantic import BaseModel, Field
@@ -34,7 +34,6 @@ async def query_expansion(state: QueryState):
     Query: {state['queries'][0]}
     """)
     return {"queries": res.queries}
-
 
 async def query_embedings(state: QueryState):
     """
@@ -96,7 +95,6 @@ async def retrive_chunks(state: QueryState):
             detail="Could not find relevant informmation for your query."
         )
     return {"chunks": output}
-
 
 async def generate_response(state: QueryState):
     llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", api_key = settings.GEMINI_API_KEY)
