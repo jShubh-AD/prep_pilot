@@ -156,7 +156,7 @@ async def generate_response(state: QueryState):
         )
     )
 
-    # return response to state with token usage, token left in state
-    tokens_available = 2000 - session.tokens_used
-    return {"llm_ans": response.content[0]["text"], "session": session, "tokens_used": token_used, "tokens_available": tokens_available}
+    # # return response to state with token usage, token left in state
+    # tokens_available = 2000 - session.tokens_used
+    return {}
 
