@@ -1,17 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends
 from app.schemas.subject_schemas import CreateSubject, ApiResponse, SubjectResponse, UpdateSubject, SubjectBase
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models.subject_models import Subject
 from sqlalchemy import select
-import os
-import uuid
-from app.core.task_manager import create_task, run_ingestion_task
 
 subject_router = APIRouter()
-
-max_size = 50 * 1024 * 1024 # 50MB
-TEMP_DIR = "data/temp_uploads"
 
 # create subject
 @subject_router.post(
@@ -127,73 +121,3 @@ async def delete_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
         raise
     except Exception as e:
         raise HTTPException(500, detail="Something whent wrong.")
-
-
-# upload notes by id
-@subject_router.post("/{subject_id}/upload/{doc_type}")
-async def upload_notes(
-    subject_id: int,
-    doc_type:str,
-    background_task: BackgroundTasks,
-    file: UploadFile=File(...),
-    ):
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDFs are allowed"
-        )
-
-    if doc_type not in ["notes", "pyq"]:
-        raise HTTPException(
-            status_code=400,
-            detail="can only upload eithe notes or pyq."
-        )
-    
-    if file.content_type != 'application/pdf':
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid content type: {file.content_type}. Must be application/pdf."
-        )
-    
-    contents = await file.read()
-    if len(contents) > max_size:
-        raise HTTPException(
-            status_code=413,
-            detail="File too large. Max allowed size is 50MB."
-        )
-    
-    if len(contents) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Uploaded file is empty."
-        )
-    
-    task_id = uuid.uuid4().hex
-
-    # Save the file to disk so the background task can read it later
-    os.makedirs(TEMP_DIR, exist_ok=True)
-    temp_filepath = os.path.join(TEMP_DIR, f"{task_id}.pdf")
-    with open(temp_filepath, "wb") as f:
-        f.write(contents)
-
-    # Create task entry in database
-    create_task(task_id=task_id, file_name=file.filename, subject_id=subject_id)
-    
-    # Add task to background tasks
-    background_task.add_task(
-        run_ingestion_task,
-        task_id=task_id,
-        temp_filepath=temp_filepath,
-        original_filename=file.filename,
-        doc_type= doc_type,
-        subject_id=subject_id,
-    )
-    
-    return {
-        "success": True,
-        "task_id": task_id,
-        "status": "PROCESSING",
-        "file_name": file.filename
-    }
-
-# upload subject pyqs by id

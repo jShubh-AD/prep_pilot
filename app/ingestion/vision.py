@@ -2,6 +2,7 @@ from app.core.settings import settings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 import asyncio
+import base64
 
 VISION_SYSTEM_PROMPT = """You are a technical image analyst for an exam prep RAG system.
 Your job is to describe images extracted from educational PDFs so they can be stored as searchable text.
@@ -22,7 +23,7 @@ async def describe_image(image_bytes: bytes, image_format: str = "png") -> str:
         try:
             response = await llm.ainvoke(
                 HumanMessage(content=[
-                    {"type": "image_url", "image_url": {"url": f"data:image/{image_format};base64,{image_bytes}"}},
+                    {"type": "image_url", "image_url": {"url": f"data:image/{image_format};base64,{base64.b64encode(image_bytes).decode()}"}},
                     {"type": "text", "text": VISION_SYSTEM_PROMPT}
                 ])
             )
@@ -53,19 +54,19 @@ IGNORE:
 - Repetitive headers/footers, Page numbers, watermarks, or metadata-level information
 """
 
-from app.schemas.gemini_chunk import GeminiChunk
+from app.schemas.gemini_chunk import GeminiChunkList
 
 async def describe_scanned_pages(page_bytes_list: list[tuple[int, bytes]]) -> list[dict]:
     message = HumanMessage(
         content=[
             *[
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_bytes}"}}
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64.b64encode(image_bytes).decode()}"}}
                 for _, image_bytes in page_bytes_list
             ],
             {"type": "text", "text": SCANNED_SYSTEM_PROMPT}
         ])
     llm = ChatGoogleGenerativeAI(model= "gemini-2.5-flash-lite", api_key=settings.GEMINI_API_KEY)
-    structured_llm = llm.with_structured_output(list[GeminiChunk])
+    structured_llm = llm.with_structured_output(GeminiChunkList)
 
     max_retries = 3
     base_delay = 2.0  # seconds
@@ -73,7 +74,7 @@ async def describe_scanned_pages(page_bytes_list: list[tuple[int, bytes]]) -> li
     for attempt in range(max_retries):
         try:
             response = await structured_llm.ainvoke([message])
-            return [chunk.text for chunk in response]
+            return response.chunks
         except Exception as e:
             is_transient = any(status in str(e) for status in ["503", "429", "UNAVAILABLE", "ResourceExhausted"])
             if is_transient and attempt < max_retries - 1:

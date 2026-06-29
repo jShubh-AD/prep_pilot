@@ -5,6 +5,7 @@ from app.api.ingestion import ingestion_router
 from app.api.chats import query_router
 from app.core.redis_servcie import init_redis, close_redis
 from app.api.subjects import subject_router
+from app.api.admin import admin_router
 from app.core.database import init_db
 
 @asynccontextmanager
@@ -34,6 +35,7 @@ app.add_middleware(
 app.include_router(ingestion_router, prefix="/tasks", tags=["Tasks"])
 app.include_router(query_router, prefix="/chats", tags= ["Chats"])
 app.include_router(subject_router, prefix="/subjects", tags= ["Subjects"])
+app.include_router(admin_router, prefix="/admin", tags=["admin"])
 
 @app.get('/', tags=['HEALTH'])
 async def health():

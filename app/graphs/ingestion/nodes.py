@@ -137,7 +137,7 @@ async def extract_scanned_pdf(state: IngestionState):
     return {
         "chunks": [
             Chunk(
-                text= gc["text"],
+                text= gc.text,
                 metadata= ChunkMetadata(
                     doc_type= state["doc_type"],
                     source_file=state["file_name"],
