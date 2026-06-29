@@ -125,15 +125,17 @@ async def extract_scanned_pdf(state: IngestionState):
         pages.append((page, image_bytes))
 
     doc.close()
-    print(f"Total pages: {len(pages)}")
+    print(f"[SCANNED EXTRACTION]: Total pages: {len(pages)}")
 
     batches = [pages[i:i + 5] for i in range(0, len(pages), 5)]
 
+    print(f"[SCANNED EXTRACTION] Total batches {len(batches)} of 5 pages.")
+
     all_chunks = []
     for i, batch in enumerate(batches):
-        print(f"API call {i+1}/{len(batches)} with {len(batch)} pages")
+        print(f"API call {i+1}/{len(batches)} with {len(batch)} pages.")
         all_chunks.extend(await describe_scanned_pages(batch))
-        print(f"[SCANNED]: adding chunks {i}")
+    print(f"[SCANNED EXTRACTION] Total Chunks {len(all_chunks)}.")
     return {
         "chunks": [
             Chunk(
@@ -155,7 +157,7 @@ async def embed_chunks(state: IngestionState):
     embeddings: list[tuple[Chunk, list[float]]] = []
     embedder = GoogleGenerativeAIEmbeddings(model="gemini-embedding-2", api_key=settings.GEMINI_API_KEY)
     for i in range(0,len(state["chunks"]), 50):
-        print(f"[embedding]: embeddings chunks {i}/{len(state['chunks'])}")
+        print(f"[EMBEDDING CHUNKS]: embeddings chunks {i}/{len(state['chunks'])}")
         chunk_batch = state["chunks"][i: i+50]
         chunk_text = [c.text for c in chunk_batch]
         batch_embeddings = await embedder.aembed_documents(texts=chunk_text, output_dimensionality=768)
@@ -176,7 +178,7 @@ def store_embedings(state: IngestionState):
     metadatas = []
 
     for chunk, embedding in state["embeddings"]:
-        print("[storring]: embedded chunks")
+        print(f"[STORING]: embedded chunks {chunk.metadata.chunk_index}/{len(state['embeddings'])}.")
         chunk_id = (
             f"{chunk.metadata.subject_id}_"
             f"s{chunk.metadata.source_file}_"
