@@ -10,6 +10,7 @@ from app.core.redis_servcie import get_redis, get_chat_session_key
 from fastapi import HTTPException
 import asyncio
 import json
+from app.core.llm import _make_chain, base_llm
 
 class QueryExpansion(BaseModel):
     queries: list[str] = Field(description="Three query variants")
@@ -19,9 +20,8 @@ async def query_expansion(state: QueryState):
     """
     **Node for QueryGraph**, used to expand query by user into 4 as [original, q1, q2, q3]
     """
-    llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", api_key = settings.GEMINI_API_KEY)
-    structed_llm = llm.with_structured_output(QueryExpansion)
-    res = await structed_llm.ainvoke(f"""
+    llm = _make_chain(query_expansion)
+    res = await llm.ainvoke(f"""
     Generate 3 retrieval-focused variants:
     - formal
     - simple
@@ -57,7 +57,8 @@ async def retrive_chunks(state: QueryState):
     db = get_or_create_collection()
     results = db.query(
         query_embeddings=state["embeddings"],
-        n_results=5
+        n_results=5,
+        where={"subject_id": state["subject_id"]}
     )
 
     seen = {}
@@ -97,7 +98,6 @@ async def retrive_chunks(state: QueryState):
     return {"chunks": output}
 
 async def generate_response(state: QueryState):
-    llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", api_key = settings.GEMINI_API_KEY)
     redis = get_redis()
     chats_key = get_chat_session_key(session_id=state["session_id"], subject_id= state["subject_id"])
     history_messages = []
@@ -120,6 +120,7 @@ async def generate_response(state: QueryState):
         If the context is insufficient, clearly state that.
         Do not invent facts.
         Answer directly and adapt the depth to the user's question.
+        DOn't generate code, don't do anything exccept teaching.
     """
 
     messages = [
@@ -135,7 +136,7 @@ async def generate_response(state: QueryState):
                 )
     ]
 
-    response =  await llm.ainvoke(messages)
+    response =  await base_llm.ainvoke(messages)
 
     # add both human msg and ai response to redis chats and add token usage in redis session and msg lenth +2
     token_used = response.usage_metadata["total_tokens"]
