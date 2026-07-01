@@ -54,16 +54,18 @@ async def get_or_create_session(
             )
 
     session_id = get_session_id()
+    session_key= get_session_key(session_id)
 
     session = Session(
         user_id=None,
+        session_key= session_key,
         is_guest=is_guest,
         tokens_used=0,
         messages_count=0
     )
 
     await redis_client.set(
-        get_session_key(session_id),
+        session_key,
         session.model_dump_json(),
         ex=86400 if is_guest else None
     )

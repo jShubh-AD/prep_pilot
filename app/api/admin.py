@@ -123,10 +123,10 @@ async def upload_notes(
             detail="Only PDFs are allowed"
         )
 
-    if doc_type not in ["notes", "pyq"]:
+    if doc_type not in ["notes", "pyq", "syllabus"]:
         raise HTTPException(
             status_code=400,
-            detail="can only upload eithe notes or pyq."
+            detail="can only upload eithe notes, syllabus or pyq."
         )
     
     if file.content_type != 'application/pdf':

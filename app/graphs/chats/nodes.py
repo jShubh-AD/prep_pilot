@@ -1,4 +1,5 @@
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from fastapi import Request
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.core.chroma_db import get_or_create_collection
 from app.graphs.chats.states import QueryState
@@ -6,10 +7,11 @@ from app.core.settings import settings
 from pydantic import BaseModel, Field
 from collections import defaultdict
 from app.schemas.chunks import Chunk
-from app.core.redis_servcie import get_redis, get_chat_session_key
+from app.core.redis_servcie import get_chat_session_key, Redis
 from fastapi import HTTPException
 import asyncio
 import json
+import time
 from app.core.llm import _make_chain, base_llm
 
 class QueryExpansion(BaseModel):
@@ -45,7 +47,7 @@ async def query_embedings(state: QueryState):
     if not embeddings:
         raise HTTPException(
             status_code=400,
-            detail="Something went wrong please try again."
+            detail="Could not create embeddings, please try again."
         )
     return {"embeddings": embeddings}
 
@@ -91,29 +93,11 @@ async def retrive_chunks(state: QueryState):
     ]
 
     if not output:
-        raise HTTPException(
-            status_code=400,
-            detail="Could not find relevant informmation for your query."
-        )
+        raise HTTPException(404, "no data found for your query.")
     return {"chunks": output}
 
-async def generate_response(state: QueryState):
-    redis = get_redis()
-    chats_key = get_chat_session_key(session_id=state["session_id"], subject_id= state["subject_id"])
-    history_messages = []
-    for msg in await redis.lrange(name=chats_key, start= -6,end= -1):
-        data = json.loads(msg)
-        if data["r"] == "u":
-            history_messages.append(HumanMessage(content=data["c"]))
-        else:
-            history_messages.append(AIMessage(content=data["c"]))
 
-    context = "\n\n".join(
-        chunk.text
-        for chunk in state["chunks"]
-    )
-
-    system_prompt = """
+SYSTEM_PROMPT = """
         You are PrepPilot, an AI tutor.
 
         Use the provided context as the primary source for your answer.
@@ -123,40 +107,72 @@ async def generate_response(state: QueryState):
         DOn't generate code, don't do anything exccept teaching.
     """
 
-    messages = [
-        SystemMessage(content= system_prompt),
-        *history_messages, 
-        HumanMessage(
-            content=f"""
-                    context: 
-                    {context}
 
-                    Question: 
-                    {state['queries'][0]}"""
-                )
+async def build_messages(state, redis: Redis):
+    chats_key = get_chat_session_key(session_id=state["session_id"], subject_id=state["subject_id"])
+    history_messages = []
+    for msg in await redis.lrange(name=chats_key, start=-6, end=-1):
+        data = json.loads(msg)
+        if data["r"] == "u":
+            history_messages.append(HumanMessage(content=data["c"]))
+        else:
+            history_messages.append(AIMessage(content=data["c"]))
+
+    context = "\n\n".join(chunk.text for chunk in state["chunks"])
+
+    return chats_key, [
+        SystemMessage(content=SYSTEM_PROMPT),
+        *history_messages,
+        HumanMessage(content=f"context:\n{context}\n\nQuestion:\n{state['queries'][0]}"),
     ]
 
-    response =  await base_llm.ainvoke(messages)
+async def stream_llm_response(state: QueryState, redis: Redis, request: Request, start):
+    chats_key, messages = await build_messages(state, redis)
 
-    # add both human msg and ai response to redis chats and add token usage in redis session and msg lenth +2
-    token_used = response.usage_metadata["total_tokens"]
+    full_text = ""
+    usage = None
+    try:
+        async for chunk in base_llm.astream(messages):
+            if await request.is_disconnected():
+                print("client disconnected stopping stream.")
+                return
+        
+            content = chunk.content
+
+            if isinstance(content, str):
+                full_text += content
+                yield f"event: token\ndata: {json.dumps({'text': content, 'time': time.time()})}\n\n"
+
+            if usage is None and chunk.usage_metadata:
+                usage = chunk.usage_metadata
+    except Exception as e:
+        yield f"event:error\ndata: {json.dumps({'message':e})}"
+        return
+    
+    token_used = usage["total_tokens"] if usage else 0
     session = state["session"]
     session.messages_count += 2
     session.tokens_used += token_used
-    await asyncio.gather(
-        redis.rpush(
-            chats_key,
-            json.dumps({"r": "u", "c": state["queries"][0]}),
-            json.dumps({"r": "a", "c": response.content}),
-        ),
-        redis.set(
-            name=state["session_id"],
-            value=session.model_dump_json(),
-            keepttl=True
+    try:
+        await asyncio.gather(
+            redis.rpush(
+                chats_key,
+                json.dumps({"r": "u", "c": state["queries"][0]}),
+                json.dumps({"r": "a", "c": full_text}),
+            ),
+            redis.set(
+                name=state["session"].session_key,
+                value=session.model_dump_json(),
+                keepttl=True
+            )
         )
-    )
+    except Exception as e:
+        print(f"Redis persist failed for session {state['session_id']}: {e}")
 
-    # # return response to state with token usage, token left in state
-    # tokens_available = 2000 - session.tokens_used
-    return {}
+    yield f"""event: done\ndata: {json.dumps({
+        'session_id': state['session_id'],
+        'tokens_used': token_used,
+        'tokens_available': 2000 - session.tokens_used,
+        'total_time': round(time.time() - start, 2)
+    })}\n\n"""
 
