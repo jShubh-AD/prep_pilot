@@ -15,35 +15,50 @@ splitter = MarkdownTextSplitter(
     chunk_overlap=50,
 )
 
-
 IMAGE_PATTERN = re.compile(r'<!-- IMAGE_START -->.*?<!-- IMAGE_END -->', re.DOTALL)
-
 PLACEHOLDER_PATTERN = re.compile(r'==>.*?<==')
+
 
 # Get pdf_type node
 async def get_pdf_type(state: IngestionState):
     doc = pymupdf.open(filename=state['tempfile_path'])
+    total_pages = len(doc)
     pages = doc[:3]
-    total_text=""
+    total_text = ""
 
     for page in pages:
         total_text += page.get_text().strip()
     
     doc.close()
-    if len(total_text) > 300:
-        return {"pdf_type": "native"}
-    return {"pdf_type": "vision"}
+    pdf_type = "native" if len(total_text) > 300 else "vision"
+    
+    return {
+        "pdf_type": pdf_type,
+        "total_pages": total_pages,
+        "current_page": 0,
+        "stored": 0,
+        "embeddings": []
+    }
 
 
-#  Extract native_pdf node
-async def extract_native(state: IngestionState):
+# Extract native_pdf batch node
+async def extract_native_batch(state: IngestionState):
     update_task_status(state["task_id"], "EXTRACTING_TEXT")
+    
+    current_page = state.get("current_page", 0)
+    total_pages = state.get("total_pages", 0)
+    
     doc = pymupdf.open(state["tempfile_path"])
     pages_md = []
 
-    for page_no in range(len(doc)):
+    start_page = current_page
+    end_page = min(current_page + 5, total_pages)
+
+    print(f"[EXTRACTING NATIVE]: Processing batch pages {start_page} to {end_page - 1} of {total_pages}")
+
+    for page_no in range(start_page, end_page):
         print(f"[EXTRACTING]: page no. {page_no}")
-        md = pymupdf4llm.to_markdown(doc, pages= [page_no], header=False, footer=False).strip()
+        md = pymupdf4llm.to_markdown(doc, pages=[page_no], header=False, footer=False).strip()
         if not md:
             continue
 
@@ -56,7 +71,7 @@ async def extract_native(state: IngestionState):
             for img_tuple, placeholder in zip(images, placeholders):
                 try:
                     xref = img_tuple[0]
-                    image_data= doc.extract_image(xref)
+                    image_data = doc.extract_image(xref)
                     image_bytes = image_data["image"]
                     image_format = image_data["ext"]
                     description = await describe_image(image_bytes, image_format)
@@ -66,15 +81,21 @@ async def extract_native(state: IngestionState):
                     print(e)
                     md = md.replace(placeholder, "", 1)
         pages_md.append(f"<!-- page {page_no} -->\n{md}")
+    
     doc.close()
     full_md = "\n".join(pages_md)
     return {"mark_down": full_md}
 
 
-# create chunks
+# create chunks batch node
 def create_chunks(state: IngestionState):
     update_task_status(state["task_id"], "CHUNKING")
-    content = re.sub(r'<!-- page \d+ -->\n', '', state["mark_down"])
+    
+    mark_down_content = state.get("mark_down")
+    if not mark_down_content:
+        return {"chunks": []}
+        
+    content = re.sub(r'<!-- page \d+ -->\n', '', mark_down_content)
     
     # extract image blocks and replace with placeholders
     images = {}
@@ -87,6 +108,8 @@ def create_chunks(state: IngestionState):
 
     splits = splitter.split_text(content)
     chunks = []
+    
+    total_embedded = len(state.get("embeddings", []))
 
     for i, split in enumerate(splits):
         cleaned = split.strip()
@@ -102,63 +125,69 @@ def create_chunks(state: IngestionState):
             Chunk(
                 text=cleaned,
                 metadata=ChunkMetadata(
-                    doc_type= state["doc_type"],
+                    doc_type=state["doc_type"],
                     source_file=state["file_name"],
-                    subject= state["subject_name"],
-                    subject_id= state["subject_id"],
-                    chunk_index=i,
+                    subject=state["subject_name"],
+                    subject_id=state["subject_id"],
+                    chunk_index=total_embedded + len(chunks),
                 )
             )
         )
-    return {"chunks":chunks}
+    return {"chunks": chunks}
 
 
-#  Extract vision_pdf node
-async def extract_scanned_pdf(state: IngestionState):
+# Extract vision_pdf batch node
+async def extract_scanned_batch(state: IngestionState):
     update_task_status(state["task_id"], "EXTRACTING_TEXT")
+
+    current_page = state.get("current_page", 0)
+    total_pages = state.get("total_pages", 0)
+    total_embedded = len(state.get("embeddings", []))
+
     doc = pymupdf.open(state["tempfile_path"])
-    pages: list[tuple[int, bytes]] = []
-    for page in range(len(doc)):
-        page_data = doc[page]
-        pix = page_data.get_pixmap(dpi = 150)
-        image_bytes = pix.tobytes("png")
-        pages.append((page, image_bytes))
+    batch = []
+
+    start_page = current_page
+    end_page = min(current_page + 5, total_pages)
+
+    print(f"[SCANNED EXTRACTION]: Processing batch pages {start_page} to {end_page - 1} of {total_pages}")
+
+    for page_num in range(start_page, end_page):
+        pix = doc[page_num].get_pixmap(dpi=150)
+        batch.append((page_num, pix.tobytes("png")))
 
     doc.close()
-    print(f"[SCANNED EXTRACTION]: Total pages: {len(pages)}")
 
-    batches = [pages[i:i + 5] for i in range(0, len(pages), 5)]
+    scanned_chunks = await describe_scanned_pages(batch)
+    print(f"[SCANNED EXTRACTION] Generated {len(scanned_chunks)} chunks for batch.")
 
-    print(f"[SCANNED EXTRACTION] Total batches {len(batches)} of 5 pages.")
-
-    all_chunks = []
-    for i, batch in enumerate(batches):
-        print(f"API call {i+1}/{len(batches)} with {len(batch)} pages.")
-        all_chunks.extend(await describe_scanned_pages(batch))
-    print(f"[SCANNED EXTRACTION] Total Chunks {len(all_chunks)}.")
-    return {
-        "chunks": [
-            Chunk(
-                text= gc.text,
-                metadata= ChunkMetadata(
-                    doc_type= state["doc_type"],
-                    source_file=state["file_name"],
-                    subject= state["subject_name"],
-                    subject_id= state["subject_id"],
-                    chunk_index=i,
-            )
+    chunks = [
+        Chunk(
+            text=gc.text,
+            metadata=ChunkMetadata(
+                doc_type=state["doc_type"],
+                source_file=state["file_name"],
+                subject=state["subject_name"],
+                subject_id=state["subject_id"],
+                chunk_index=total_embedded + i,
+            ),
         )
-        for i, gc in enumerate(all_chunks)
-    ]}
+        for i, gc in enumerate(scanned_chunks)
+    ]
 
-# chunk embedder
+    return {"chunks": chunks}
+
+
+# chunk embedder node
 async def embed_chunks(state: IngestionState):
-    update_task_status(state["task_id"],"EMBEDDING")
+    update_task_status(state["task_id"], "EMBEDDING")
     embeddings: list[tuple[Chunk, list[float]]] = []
     embedder = GoogleGenerativeAIEmbeddings(model="gemini-embedding-2", api_key=settings.GEMINI_API_KEY)
-    for i in range(0,len(state["chunks"]), 50):
-        print(f"[EMBEDDING CHUNKS]: embeddings chunks {i}/{len(state['chunks'])}")
-        chunk_batch = state["chunks"][i: i+50]
+    
+    chunks = state.get("chunks", [])
+    for i in range(0, len(chunks), 50):
+        print(f"[EMBEDDING CHUNKS]: embedding chunks {i}/{len(chunks)}")
+        chunk_batch = chunks[i: i+50]
         chunk_text = [c.text for c in chunk_batch]
         batch_embeddings = await embedder.aembed_documents(texts=chunk_text, output_dimensionality=768)
         if not batch_embeddings:
@@ -167,7 +196,8 @@ async def embed_chunks(state: IngestionState):
         embeddings.extend(list(zip(chunk_batch, batch_embeddings)))
     return {"embeddings": embeddings}
 
-#  store embeddings
+
+# store embeddings node
 def store_embedings(state: IngestionState):
     update_task_status(state["task_id"], "STORING")
     collection = get_or_create_collection()
@@ -177,8 +207,16 @@ def store_embedings(state: IngestionState):
     embeddings = []
     metadatas = []
 
-    for chunk, embedding in state["embeddings"]:
-        print(f"[STORING]: embedded chunks {chunk.metadata.chunk_index}/{len(state['embeddings'])}.")
+    all_embeddings = state.get("embeddings", [])
+    stored_count = state.get("stored", 0)
+    current_page = state.get("current_page", 0)
+    total_pages = state.get("total_pages", 0)
+
+    # Slice only the newly appended embeddings from this batch
+    new_embeddings = all_embeddings[stored_count:]
+
+    for chunk, embedding in new_embeddings:
+        print(f"[STORING]: storing chunk index {chunk.metadata.chunk_index} ({len(ids) + 1}/{len(new_embeddings)} in current batch)")
         chunk_id = (
             f"{chunk.metadata.subject_id}_"
             f"s{chunk.metadata.source_file}_"
@@ -190,11 +228,23 @@ def store_embedings(state: IngestionState):
         embeddings.append(embedding)
         metadatas.append(chunk.metadata.model_dump())
     
-    collection.upsert(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-        metadatas=metadatas
-    )
+    if ids:
+        collection.upsert(
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas
+        )
 
-    return {"stored": len(ids)}
+    new_stored = stored_count + len(ids)
+    next_page = min(current_page + 5, total_pages)
+
+    print(f"[STORING BATCH DONE]: Stored {len(ids)} chunks. Next page cursor: {next_page}/{total_pages}")
+
+    # Return reset states to keep memory usage flat
+    return {
+        "stored": new_stored,
+        "current_page": next_page,
+        "chunks": [],
+        "mark_down": None
+    }

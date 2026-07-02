@@ -1,17 +1,25 @@
-from typing import TypedDict
-from typing import NotRequired
+from typing import TypedDict, NotRequired, Annotated
+import operator
 from app.schemas.chunks import Chunk
 
 class IngestionState(TypedDict):
     task_id: str
     tempfile_path: str
-    file_name:str
+    file_name: str
     subject_id: int
     subject_name: str
-    pdf_type: str
-    mark_down: NotRequired[str | None]
-    chunks: list[Chunk]
-    embeddings: list[tuple[Chunk, list[float]]]
-    stored: int
     doc_type: str
-    error: list[str]
+    
+    # Inferred/runtime states
+    pdf_type: NotRequired[str]
+    total_pages: NotRequired[int]
+    current_page: NotRequired[int]
+    
+    # Processed data per-batch
+    mark_down: NotRequired[str | None]
+    chunks: NotRequired[list[Chunk]]
+    
+    # Accumulate embeddings across all batches
+    embeddings: Annotated[list[tuple[Chunk, list[float]]], operator.add]
+    stored: NotRequired[int]
+    error: NotRequired[list[str]]
