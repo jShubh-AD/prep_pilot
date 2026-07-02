@@ -11,14 +11,13 @@ Focus on:
 - Flowcharts: describe steps and flow
 Be concise but complete. Do not say "this image shows" — just describe directly."""
 
-async def describe_image(image_bytes: bytes, image_format: str = "png") -> str:    
-    response = await base_llm.ainvoke(
-        HumanMessage(
+async def describe_image(image_bytes: bytes, image_format: str = "png") -> str:  
+    message = HumanMessage(
             content=[
                 {"type": "image_url", "image_url": {"url": f"data:image/{image_format};base64,{base64.b64encode(image_bytes).decode()}"}},
                 {"type": "text", "text": VISION_SYSTEM_PROMPT}
-            ])
-        )
+            ])  
+    response = await base_llm.ainvoke([message])
     if isinstance(response.content, str):
         return response.content
     return response.content[0].get("text", "")

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, BackgroundTasks
 from typing import Optional
 from app.core.chroma_db import get_or_create_collection
-from app.schemas.chunks import Chunk, ChunkMetadata
+from app.core.helpers import sanitize_filename
 import os
 import uuid
 from app.core.task_manager import create_task, run_ingestion_task
@@ -156,15 +156,17 @@ async def upload_notes(
     with open(temp_filepath, "wb") as f:
         f.write(contents)
 
+    file_name = sanitize_filename(file.filename)
+
     # Create task entry in database
-    create_task(task_id=task_id, file_name=file.filename, subject_id=subject_id)
+    create_task(task_id=task_id, file_name=file_name, subject_id=subject_id)
     
     # Add task to background tasks
     background_task.add_task(
         run_ingestion_task,
         task_id=task_id,
         temp_filepath=temp_filepath,
-        original_filename=file.filename,
+        original_filename=file_name,
         doc_type= doc_type,
         subject_id=subject_id,
     )
@@ -173,5 +175,5 @@ async def upload_notes(
         "success": True,
         "task_id": task_id,
         "status": "PROCESSING",
-        "file_name": file.filename
+        "file_name": file_name
     }
