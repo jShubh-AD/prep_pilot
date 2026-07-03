@@ -2,15 +2,18 @@ from typing import TypedDict, Annotated
 from operator import add
 from app.schemas.chunks import Chunk
 from app.schemas.redis_schemas import Session
+from app.schemas.query import QueryAnalysis
 
 class QueryState(TypedDict):
     session: Session
     session_id: str
     subject_id: int
-    llm_ans: str
-    queries: Annotated[list[str], add]
-    embeddings: list[list[float]]
+
+    query: str  # Original query from user
+    analysis: QueryAnalysis | None
+    expanded_queries: list[str]
+
+    embeddings: list[list[float]]  # List of vectors for each expanded query
     chunks: list[Chunk]
-    tokens_used: int # used to complete processing request
-    tokens_available: int
+
     errors: Annotated[list[str], add]

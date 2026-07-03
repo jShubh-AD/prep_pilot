@@ -3,6 +3,7 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.core.settings import settings
 from app.schemas.gemini_chunk import GeminiChunkList
+from app.schemas.query import QueryAnalysis
 
 _MODELS = [
     "gemini-2.5-flash",
@@ -28,3 +29,4 @@ def _make_chain(schema=None):
 # one instance per use-case, created once at import time
 base_llm = _make_chain()                          # plain generation (query node, etc)
 scanned_llm = _make_chain(GeminiChunkList)        # scanned page extraction
+intent_llm = _make_chain(QueryAnalysis)

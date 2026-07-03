@@ -32,7 +32,10 @@ async def send_query(req: QueryRequest, request: Request ,redis: Redis = Depends
         session_id=session_id,
         subject_id=req.subject_id,
         session=session,
-        queries=[req.query],
+        query=req.query,
+        expanded_queries=[],
+        embeddings=[],
+        chunks=[],
         errors=[]
     )
 

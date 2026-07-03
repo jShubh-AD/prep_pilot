@@ -12,4 +12,4 @@ class ChunkMetadata(BaseModel):
 class Chunk(BaseModel):
     text: str
     metadata: ChunkMetadata
-    confidace: float | None = None
+    confidence: float | None = None
