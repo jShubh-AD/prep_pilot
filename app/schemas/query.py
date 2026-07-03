@@ -52,10 +52,9 @@ class QueryAnalysis(BaseModel):
         "notes",
         "pyq",
         "syllabus",
-        "any",
     ] = Field(
         description=(
-            "Preferred document type to search. Choose 'any' unless the user explicitly requests a specific document type."
+            "Only select 'pyq' or 'syllabus' if the user explicitly indicates that document type else seletc 'notes'"
         )
     )
 

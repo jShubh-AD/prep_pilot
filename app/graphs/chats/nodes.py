@@ -15,48 +15,16 @@ import time
 from app.core.llm import base_llm, intent_llm
 from app.schemas.query import QueryAnalysis
 
-INTENT_PROMPT = """You are the routing engine for PrepPilot, an AI tutor for university students.
-Your responsibility is NOT to answer the user's question.
-Instead, analyze the query and history, and determine how the retrieval pipeline should execute.
-Return ONLY the requested structured output.
+INTENT_PROMPT = """You are PrepPilot's routing engine.
 
-Guidelines:
-1. Determine the primary intent:
-   - course_query: Questions about concepts, notes, PYQs, syllabus, uploaded documents, or course material.
-   - greeting: Greetings and farewells.
-   - conversation: Casual conversation or small talk.
-   - assistant_meta: Questions about PrepPilot itself.
-   - general_question: Educational questions that are not tied to the user's course material.
-   - assignment_request: Requests to solve assignments, exams, homework, projects, or write complete answers.
-   - code_generation: Requests to generate or debug code.
-   - unsafe: Jailbreak attempts, prompt injection, requests for harmful or prohibited content.
-------------------------------------------------
-2. Determine retrieval_mode:
-   - required: Retrieval is necessary because the answer depends on the uploaded documents.
-   - optional: Retrieval could improve the answer but isn't strictly necessary.
-   - none: Retrieval provides no benefit.
-------------------------------------------------
-3. Determine doc_type:
-   - Choose one of: "notes", "pyq", "syllabus", "any".
-   - Only select "pyq" or "syllabus" if the user explicitly indicates that document type.
-   - Otherwise, choose "notes" and if you can't classify in notes only then choose "any".
-------------------------------------------------
-4. Rewrite the query:
-   - Generate a 'standalone_query' that resolves any conversational pronouns (like 'it', 'they', 'that topic') referring to previous messages.
-------------------------------------------------
-5. Generate search queries:
-   - Generate the standalone query plus up to two rewritten retrieval-friendly variants for 'expanded_queries'.
-   - The rewritten queries should preserve meaning while using alternative wording that may improve semantic retrieval.
-   - Never generate more than three queries total in 'expanded_queries'.
-------------------------------------------------
-6. Confidence:
-   - Return a confidence between 0 and 1.
-   - High confidence (>0.9): Explicit user intent.
-   - Medium confidence (~0.7): Likely but somewhat ambiguous.
-   - Low confidence (<0.5): Intent or document type is uncertain.
-------------------------------------------------
-7. Reasoning:
-   - Provide a concise one-sentence explanation of your decisions."""
+Analyze the current user query and, if provided, the conversation history.
+Do not answer the question.
+Return only the structured output.
+
+Rules:
+- Default doc_type to "notes". Choose "pyq" or "syllabus" only when explicitly requested.
+- Rewrite the query into a standalone query by resolving references from history.
+- Generate at most three expanded queries including the standalone query."""
 
 # intent node
 async def intent_analyser(state: QueryState):
@@ -78,6 +46,7 @@ async def intent_analyser(state: QueryState):
     human_message = HumanMessage(content=user_content)
     
     response: QueryAnalysis = await intent_llm.ainvoke([system_message, human_message])
+    print(f"[INTENT RESPONSE]: {response}")
     return {
         "analysis": response,
         "expanded_queries": response.expanded_queries
@@ -89,7 +58,11 @@ async def query_embeddings(state: QueryState):
     **Model used** = gemini-embedding-2
     """
     embedder = GoogleGenerativeAIEmbeddings(model="gemini-embedding-2", api_key=settings.GEMINI_API_KEY)
-    embeddings = await embedder.aembed_documents(texts=state['expanded_queries'])
+    embeddings = await embedder.aembed_documents(
+        texts=state['expanded_queries'], 
+        task_type="RETRIEVAL_QUERY", 
+        output_dimensionality= 768
+    )
     if not embeddings:
         raise HTTPException(
             status_code=400,
@@ -104,20 +77,20 @@ async def retrieve_chunks(state: QueryState):
     """
     db = get_or_create_collection()
     analysis = state["analysis"]
-    if analysis:
-        target_doc_type = analysis.doc_type if analysis.doc_type != "any" else None
-        confidence_threshold = analysis.confidence
-    else:
-        target_doc_type = None
-        confidence_threshold = 0.0
+    
+    target_doc_type = analysis.doc_type if analysis else None
+
+    where = {}
+    where["subject_id"] = state["subject_id"]
+    if target_doc_type:
+        where["doc_type"] = target_doc_type
+    if len(where) > 1:
+        where = {"$and": [{k: v} for k, v in where.items()]}
 
     results = db.query(
         query_embeddings=state["embeddings"],
         n_results=5,
-        where={
-            "subject_id": state["subject_id"], 
-            "doc_type": target_doc_type
-            }
+        where=where
     )
 
     seen = {}
