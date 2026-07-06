@@ -130,6 +130,8 @@ async def retrieve_chunks(state: QueryState):
     output.sort(key=lambda x: x.confidence or 0.0, reverse=True)
 
     print(f"[OUTPUTS]: {output}")
+    if not output:
+        raise HTTPException(400,"I'm sorry, but I couldn't find any relevant information on that topic in my course materials.")
     return {"chunks": output}
 
 
@@ -169,7 +171,7 @@ async def build_messages(state: QueryState, redis: Redis):
     return chats_key, [
         SystemMessage(content=SYSTEM_PROMPT),
         *history_messages,
-        HumanMessage(content=f"context:\n{context}\n\nQuestion:\n{query_text}"),
+        HumanMessage(content=f"intent_analyses: {state['analysis']}\ncontext:\n{context}\n\nQuestion:\n{query_text}"),
     ]
 
 async def stream_llm_response(state: QueryState, redis: Redis, request: Request, start):
@@ -190,11 +192,11 @@ async def stream_llm_response(state: QueryState, redis: Redis, request: Request,
         
     # Handle grounding check: empty chunks for strictly-grounded intents
     chunks = state.get("chunks", [])
-    if not chunks and intent in ("course_query", "general_question", "assignment_request"):
-        msg = "I'm sorry, but I couldn't find any relevant information on that topic in your uploaded course materials."
-        yield f"event: token\ndata: {json.dumps({'text': msg, 'time': time.time()})}\n\n"
-        yield "event: done\n\n"
-        return
+    # if not chunks and intent in ("course_query", "general_question", "assignment_request"):
+    #     msg = "I'm sorry, but I couldn't find any relevant information on that topic in my course materials."
+    #     yield f"event: token\ndata: {json.dumps({'text': msg, 'time': time.time()})}\n\n"
+    #     yield "event: done\n\n"
+    #     return
 
     chats_key, messages = await build_messages(state, redis)
 
