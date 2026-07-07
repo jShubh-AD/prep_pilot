@@ -33,6 +33,9 @@ def get_session_key(session_id: str)->str:
 def get_chat_session_key(session_id:str, subject_id:str)->str:
     return f"chats:{session_id}:{subject_id}"
 
+def get_chat_summary_key(session_id:str, subject_id:str)->str:
+    return f"chat_summary:{session_id}:{subject_id}"
+
 def get_session_id() -> str:
     """
     retruns session id(uuid4) for chat sessions 

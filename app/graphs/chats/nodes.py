@@ -7,7 +7,7 @@ from app.core.settings import settings
 from pydantic import BaseModel, Field
 from collections import defaultdict
 from app.schemas.chunks import Chunk
-from app.core.redis_servcie import get_chat_session_key, Redis
+from app.core.redis_servcie import get_chat_session_key, Redis, get_chat_summary_key
 from fastapi import HTTPException
 import asyncio
 import json
@@ -16,7 +16,6 @@ from app.core.llm import base_llm, intent_llm
 from app.schemas.query import QueryAnalysis
 
 INTENT_PROMPT = """You are PrepPilot's routing engine.
-
 Analyze the current user query and, if provided, the conversation history.
 Do not answer the question.
 Return only the structured output.
@@ -24,29 +23,58 @@ Return only the structured output.
 Rules:
 - Default doc_type to "notes". Choose "pyq" or "syllabus" only when explicitly requested.
 - Rewrite the query into a standalone query by resolving references from history.
-- Generate at most three expanded queries including the standalone query."""
+- Generate at most three expanded queries including the standalone query.
+- Generate summary of Conversation History while preserving all the key details and the core of conversation.
+- Keep the summary in bullet points, whihc may help llm for further reasoning and answering. 
+- if there is no conversation keep the related filed None.
+- do not include user's current query in summary. only sumaries the previous chats.
+"""
 
 # intent node
 async def intent_analyser(state: QueryState):
     from app.core.redis_servcie import get_redis
     redis = get_redis()
     chats_key = get_chat_session_key(session_id=state["session_id"], subject_id=state["subject_id"])
-    
-    # Fetch last 4 messages for conversational context
+    chat_summary_key = get_chat_summary_key(session_id=state["session_id"], subject_id=state["subject_id"])
+
+    chat_summary =  await redis.get(chat_summary_key)
+
     history_messages = []
-    for msg in await redis.lrange(name=chats_key, start=-4, end=-1):
-        data = json.loads(msg)
-        role = "User" if data["r"] == "u" else "Assistant"
-        history_messages.append(f"{role}: {data['c']}")
+    if chat_summary:
+        history_messages.append(f"Conversation Summary:\n{chat_summary}\n")
+        for msg in await redis.lrange(name=chats_key, start= -4, end= -1):
+            data = json.loads(msg)
+            role = 'User' if data['r'] == 'u' else "Assistant"
+            history_messages. append(f"{role}: {data['c']}")
+    else:
+        # Fetch last 20 messages for conversational context
+        for msg in await redis.lrange(name=chats_key, start=-20, end=-1):
+            data = json.loads(msg)
+            role = "User" if data["r"] == "u" else "Assistant"
+            history_messages.append(f"{role}: {data['c']}")
     
     history_context = "\n".join(history_messages)
     
     system_message = SystemMessage(content=INTENT_PROMPT)
     user_content = f"Conversation History:\n{history_context}\n\nUser Query: {state['query']}"
     human_message = HumanMessage(content=user_content)
-    
     response: QueryAnalysis = await intent_llm.ainvoke([system_message, human_message])
-    print(f"[INTENT RESPONSE]: {response}")
+    if response.chat_summary is not None and chat_summary != response.chat_summary:
+        result = await redis.set(
+            chat_summary_key,
+            response.chat_summary,
+            keepttl=86400,
+        )
+        print(result)
+
+    print(f"""
+        [INTENT]: {response.intent}
+        [REASONING]: {response.reasoning}
+        [CONFIDENCE]: {response.confidence}
+        [RETRIVAL]: {response.intent}
+        [DOC_TYPE]: {response.doc_type}
+    """)
+    print(f"[CHAT SUMMARY]: {response.chat_summary}")
     return {
         "analysis": response,
         "expanded_queries": response.expanded_queries
@@ -135,25 +163,19 @@ async def retrieve_chunks(state: QueryState):
     return {"chunks": output}
 
 
-SYSTEM_PROMPT = """You are PrepPilot, an AI tutor.
+SYSTEM_PROMPT = """You are Sakshi (didi), an expert of {subject}.
+you have  teaching experience of more than 12 years with, you have helped students plan, understand, revise and prepare for exams.
 Ground your response strictly in the provided course context.
-Carefully review the intent analysis. Use it as guidance, not as an absolute rule.
-If the provided context or history is sufficient to answer, explain, summarize, infer, or estimate based only on that context and history.
+Carefully review the user_intent_reasoning, and understand what and why behind the user's query.
+Try to answere based on the context and chat_summary, not sufficient to answer then responde with a polite reply.
 If the context or history is insufficient, politely state that the required information is not available in the course material.
 
 If the user's intent is identified as 'assignment_request', explain the concepts and teach the solution using guidance and hints; do NOT generate final, copy-pasteable answers.
-If the user's intent is 'assistant_meta' or 'greeting', you may reply directly and helpfully from your own knowledge.
+If the user's intent is 'assistant_meta', 'greeting', 'conversation', 'general_questions', you may reply directly and helpfully from your own knowledge.
 """
 
-async def build_messages(state: QueryState, redis: Redis):
+async def build_messages(state: QueryState):
     chats_key = get_chat_session_key(session_id=state["session_id"], subject_id=state["subject_id"])
-    history_messages = []
-    for msg in await redis.lrange(name=chats_key, start=-6, end=-1):
-        data = json.loads(msg)
-        if data["r"] == "u":
-            history_messages.append(HumanMessage(content=data["c"]))
-        else:
-            history_messages.append(AIMessage(content=data["c"]))
 
     def format_chunk(chunk: Chunk):
         meta = chunk.metadata
@@ -171,9 +193,14 @@ async def build_messages(state: QueryState, redis: Redis):
     query_text = state["analysis"].standalone_query if state.get("analysis") else state["query"]
 
     return chats_key, [
-        SystemMessage(content=SYSTEM_PROMPT),
-        *history_messages,
-        HumanMessage(content=f"intent_analyses: {state['analysis']}\ncontext:\n{context}\n\nQuestion:\n{query_text}"),
+        SystemMessage(content=SYSTEM_PROMPT.format(subject=state["subject_name"])),
+        HumanMessage(content=f"""
+                    user_intent: {state['analysis'].intent}
+                    user_intent_reasoning: {state['analysis'].reasoning}
+                    reasoning_confidance: {state['analysis'].confidence}
+                    chat_summary: {state['analysis'].chat_summary}
+                    context: {context}
+                    Question: {query_text}"""),
     ]
 
 async def stream_llm_response(state: QueryState, redis: Redis, request: Request, start):
@@ -191,18 +218,10 @@ async def stream_llm_response(state: QueryState, redis: Redis, request: Request,
         yield f"event: token\ndata: {json.dumps({'text': msg, 'time': time.time()})}\n\n"
         yield "event: done\n\n"
         return
-        
-    # Handle grounding check: empty chunks for strictly-grounded intents
-    chunks = state.get("chunks", [])
-    # if not chunks and intent in ("course_query", "general_question", "assignment_request"):
-    #     msg = "I'm sorry, but I couldn't find any relevant information on that topic in my course materials."
-    #     yield f"event: token\ndata: {json.dumps({'text': msg, 'time': time.time()})}\n\n"
-    #     yield "event: done\n\n"
-    #     return
 
-    chats_key, messages = await build_messages(state, redis)
-
+    chats_key, messages = await build_messages(state)
     full_text = ""
+
     usage = None
     try:
         async for chunk in base_llm.astream(messages):

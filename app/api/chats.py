@@ -10,16 +10,29 @@ import time
 import json
 from typing import Any
 from app.core.redis_servcie import get_redis, Redis
-from app.schemas.redis_schemas import Session, ChatMessages
+from app.schemas.redis_schemas import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import get_db
+from app.models.subject_models import Subject
 
 query_router = APIRouter()
 
 @query_router.post("/query")
-async def send_query(req: QueryRequest, request: Request ,redis: Redis = Depends(get_redis)):
+async def send_query(
+    req: QueryRequest,
+    request: Request,
+    db: AsyncSession=Depends(get_db),
+    redis: Redis = Depends(get_redis)
+    ):
     start = time.time()
     print(f"[API] Hit at: {start}")
     if not req.query.strip():
         raise HTTPException(400, "Query can't be empty.")
+    
+    subject = await db.get(Subject, req.subject_id)
+    
+    if not subject:
+        raise HTTPException(404, "Could not find the subject.")
     
     session_id, session = await get_or_create_session(req.session_id, True)
 
@@ -32,6 +45,7 @@ async def send_query(req: QueryRequest, request: Request ,redis: Redis = Depends
         session_id=session_id,
         subject_id=req.subject_id,
         session=session,
+        subject_name= subject.subject_name,
         query=req.query,
         expanded_queries=[],
         embeddings=[],

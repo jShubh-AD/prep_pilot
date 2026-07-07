@@ -89,3 +89,7 @@ class QueryAnalysis(BaseModel):
             "Used only for debugging and observability."
         )
     )
+
+    chat_summary: str| None = Field(
+        default= None,
+        description= "To hold the summary of last 20 chat messages to be further used by answering llm.")
