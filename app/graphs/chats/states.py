@@ -9,6 +9,7 @@ class QueryState(TypedDict):
     session_id: str
     subject_id: int
     subject_name: str
+    format: str
 
     query: str  # Original query from user
     analysis: QueryAnalysis | None

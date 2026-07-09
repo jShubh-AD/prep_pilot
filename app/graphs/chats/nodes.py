@@ -1,19 +1,24 @@
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from fastapi import Request
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from app.core.chroma_db import get_or_create_collection
 from app.graphs.chats.states import QueryState
 from app.core.settings import settings
-from pydantic import BaseModel, Field
 from collections import defaultdict
 from app.schemas.chunks import Chunk
 from app.core.redis_servcie import get_chat_session_key, Redis, get_chat_summary_key
 from fastapi import HTTPException
 import asyncio
+import base64
 import json
 import time
 from app.core.llm import base_llm, intent_llm
 from app.schemas.query import QueryAnalysis
+from google.genai import types
+from google import genai
+
+
+AUDIO_MODEL="models/gemini-3.1-flash-live-preview"
 
 INTENT_PROMPT = """You are PrepPilot's routing engine.
 Analyze the current user query and, if provided, the conversation history.
@@ -71,7 +76,7 @@ async def intent_analyser(state: QueryState):
         [INTENT]: {response.intent}
         [REASONING]: {response.reasoning}
         [CONFIDENCE]: {response.confidence}
-        [RETRIVAL]: {response.intent}
+        [RETRIVAL]: {response.retrieval_mode}
         [DOC_TYPE]: {response.doc_type}
     """)
     print(f"[CHAT SUMMARY]: {response.chat_summary}")
@@ -164,7 +169,7 @@ async def retrieve_chunks(state: QueryState):
 
 
 SYSTEM_PROMPT = """You are Sakshi (didi), an expert of {subject}.
-you have  teaching experience of more than 12 years with, you have helped students plan, understand, revise and prepare for exams.
+You have years of teaching experience, you help students plan, understand, revise and prepare for exams.
 Ground your response strictly in the provided course context.
 Carefully review the user_intent_reasoning, and understand what and why behind the user's query.
 Try to answere based on the context and chat_summary, not sufficient to answer then responde with a polite reply.
@@ -174,7 +179,7 @@ If the user's intent is identified as 'assignment_request', explain the concepts
 If the user's intent is 'assistant_meta', 'greeting', 'conversation', 'general_questions', you may reply directly and helpfully from your own knowledge.
 """
 
-async def build_messages(state: QueryState):
+async def build_text_messages(state: QueryState):
     chats_key = get_chat_session_key(session_id=state["session_id"], subject_id=state["subject_id"])
 
     def format_chunk(chunk: Chunk):
@@ -193,17 +198,16 @@ async def build_messages(state: QueryState):
     query_text = state["analysis"].standalone_query if state.get("analysis") else state["query"]
 
     return chats_key, [
-        SystemMessage(content=SYSTEM_PROMPT.format(subject=state["subject_name"])),
         HumanMessage(content=f"""
                     user_intent: {state['analysis'].intent}
                     user_intent_reasoning: {state['analysis'].reasoning}
                     reasoning_confidance: {state['analysis'].confidence}
                     chat_summary: {state['analysis'].chat_summary}
                     context: {context}
-                    Question: {query_text}"""),
-    ]
+                    Question: {query_text}""")]
 
 async def stream_llm_response(state: QueryState, redis: Redis, request: Request, start):
+    print("[CALLING] stream_llm_response")
     analysis = state.get("analysis")
     intent = analysis.intent if analysis else "course_query"
     
@@ -219,29 +223,85 @@ async def stream_llm_response(state: QueryState, redis: Redis, request: Request,
         yield "event: done\n\n"
         return
 
-    chats_key, messages = await build_messages(state)
+    chats_key, messages = await build_text_messages(state)
     full_text = ""
 
     usage = None
-    try:
-        async for chunk in base_llm.astream(messages):
-            if await request.is_disconnected():
-                print("client disconnected stopping stream.")
-                return
+
+    if state["format"] == 'text':
+        try:
+            print("[stream_llm_response]: text")
+            async for chunk in base_llm.astream([SystemMessage(content=SYSTEM_PROMPT.format(subject=state["subject_name"])), *messages]):
+                print("[stream_llm_response]: Chunk")
+                if await request.is_disconnected():
+                    print("client disconnected stopping stream.")
+                    return
+                content = chunk.content
+                if isinstance(content, str):
+                    full_text += content
+                    yield f"event: token\ndata: {json.dumps({'text': content, 'time': time.time()})}\n\n"
+                if usage is None and chunk.usage_metadata:
+                    usage = chunk.usage_metadata
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}"
+            return
+    else:
+        config = types.LiveConnectConfig(
+            system_instruction= SYSTEM_PROMPT.format(subject=state["subject_name"]),
+            response_modalities=["AUDIO"],
+            output_audio_transcription={},
+            media_resolution="MEDIA_RESOLUTION_MEDIUM",
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Zephyr")
+                )
+            ),
+            context_window_compression=types.ContextWindowCompressionConfig(
+                trigger_tokens=104857,
+                sliding_window=types.SlidingWindow(target_tokens=52428),
+            ),
+        )
         
-            content = chunk.content
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        async with client.aio.live.connect(model= AUDIO_MODEL, config=config) as session:
+            await session.send_client_content(
+                turns=types.Content(
+                    role='user',
+                    parts=[types.Part(text=messages[0].content)]
+                ),
+                turn_complete=True,
+            )
+            async for event in session.receive():
+                event_ot = None
+                event_audio = None
+                if event.usage_metadata:
+                    usage = event.usage_metadata
+                if event.server_content:
+                    sc = event.server_content
+                    if sc.output_transcription:
+                        event_ot = sc.output_transcription.text
+                        full_text += event_ot
+                    if sc.model_turn:
+                        for part in sc.model_turn.parts:
+                            if (part.inline_data and part.inline_data.mime_type.startswith("audio/pcm")):
+                                audio = part.inline_data.data
+                                event_audio = (base64.b64encode(audio).decode("ascii")if audio else None)
+                    payload = {
+                        "text": event_ot,
+                        "audio": event_audio,
+                        "time": time.time(),
+                    }
+                    yield f"event: token\ndata: {json.dumps(payload)}\n\n"
 
-            if isinstance(content, str):
-                full_text += content
-                yield f"event: token\ndata: {json.dumps({'text': content, 'time': time.time()})}\n\n"
+                    if sc.turn_complete or sc.interrupted:
+                        break
+            
 
-            if usage is None and chunk.usage_metadata:
-                usage = chunk.usage_metadata
-    except Exception as e:
-        yield f"event: error\ndata: {json.dumps({'message': str(e)})}"
-        return
-    
-    token_used = usage["total_tokens"] if usage else 0
+    token_used = 0
+    if state["format"] == "text":
+        token_used = usage["total_tokens"] if usage else 0
+    else:
+        token_used = usage.total_token_count
     session = state["session"]
     session.messages_count += 2
     session.tokens_used += token_used
@@ -261,6 +321,7 @@ async def stream_llm_response(state: QueryState, redis: Redis, request: Request,
     except Exception as e:
         print(f"Redis persist failed for session {state['session_id']}: {e}")
 
+    print("Sending done event")
     yield f"""event: done\ndata: {json.dumps({
         'session_id': state['session_id'],
         'tokens_used': token_used,

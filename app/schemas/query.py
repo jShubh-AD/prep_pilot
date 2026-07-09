@@ -6,7 +6,8 @@ class QueryRequest(BaseModel):
     query: str
     subject_id: int
     session_id: str | None = None
-    top_k: int = 5  # optional, defaults to 5
+    format: Literal["text", "audio"] = "text"
+    top_k: int = 5
 
 class QueryAnalysis(BaseModel):
     """

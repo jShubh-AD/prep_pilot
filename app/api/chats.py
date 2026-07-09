@@ -46,6 +46,7 @@ async def send_query(
         subject_id=req.subject_id,
         session=session,
         subject_name= subject.subject_name,
+        format= req.format,
         query=req.query,
         expanded_queries=[],
         embeddings=[],
