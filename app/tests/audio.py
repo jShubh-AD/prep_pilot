@@ -1,6 +1,7 @@
 import asyncio
 from google import genai
 from google.genai import types
+from app.core.settings import settings
 
 config = types.LiveConnectConfig(
     response_modalities=[
@@ -18,8 +19,7 @@ config = types.LiveConnectConfig(
         sliding_window=types.SlidingWindow(target_tokens=52428),
     ),
 )
-API_KEY = "AIzaSyB9Q1x5fnLuUUxG_zAGHkYVREe-ysAV_nA"
-client = genai.Client(api_key=API_KEY)
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 async def main():
     async with client.aio.live.connect(
