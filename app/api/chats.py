@@ -38,7 +38,7 @@ async def send_query(
 
     print(f"session_id: {session_id} \nsession: {session}")
 
-    if (session.tokens_used >= 2000 or session.messages_count >= 50) and session.is_guest:
+    if (session.tokens_used >= 20000 or session.messages_count >= 50) and session.is_guest:
         raise HTTPException(503,"You have reached your maximum daily limit.")
     
     state = QueryState(

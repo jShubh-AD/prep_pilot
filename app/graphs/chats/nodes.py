@@ -325,7 +325,7 @@ async def stream_llm_response(state: QueryState, redis: Redis, request: Request,
     yield f"""event: done\ndata: {json.dumps({
         'session_id': state['session_id'],
         'tokens_used': token_used,
-        'tokens_available': 2000 - session.tokens_used,
+        'tokens_available': 20000 - session.tokens_used,
         'total_time': round(time.time() - start, 2)
     })}\n\n"""
 
